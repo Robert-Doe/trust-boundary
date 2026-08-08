@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 19 — Script Sink Guard</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 19</span>Script Sink Guard</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../18_html_sink_guard/tutorial.html">Module 18: HTML Sink Guard</a>
+  <a class="tag-link" href="../16_policy_factory/tutorial.html">Module 16: Policy Factory</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Module 18 tested one family of checkpoints (HTML sinks) and found them
+uniformly rigorous. This module tests a SECOND family — the ones governing
+code execution rather than markup — and finds something messier and more
+honest than a tidy analogy: some checkpoints in this family (eval,
+script.src) are fully staffed and rigorous. One (the <code>Function</code>
+constructor) turns out to have no checkpoint infrastructure installed at
+all yet — it just refuses everyone, real credentials or not. And one more
+(<code>script.text</code>) has a checkpoint that correctly checks
+credentials, but sits at a door that, it turns out, doesn't actually lead
+anywhere on its own. Real systems have seams like this, and finding them
+by testing — not by assuming symmetry — is the entire point of this module.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A policy defines both <code>createScript</code> and <code>createScriptURL</code>, each returning input unchanged (same no-transform convention as Module 18).</li>
+  <li><code>eval(policy.createScript('40 + 2'))</code> — a real <code>TrustedScript</code> — succeeds, returns 42.</li>
+  <li><code>new Function(policy.createScript(...))</code> — the SAME kind of real, valid value — throws anyway. The browser's own console explains: the <code>Function</code> constructor doesn't accept Trusted Types values at all yet.</li>
+  <li><code>script.src = policy.createScriptURL('/child.js')</code> succeeds; <code>child.js</code> genuinely loads and executes.</li>
+  <li><code>script.text = policy.createScript(...)</code> — the assignment itself succeeds (no throw) — but the resulting script never actually runs, confirmed by checking a marker variable directly, both before and after connecting the element to the document.</li>
+  <li>A duck-typed fake object handed to <code>script.src</code>, and a plain string handed to the same sink, both throw with identical error text — the guard here is exactly as rigorous as Module 18's HTML sinks.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="10" width="330" height="50" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="30">eval(TrustedScript)</text>
+    <text x="20" y="48" fill="#3fb950">SUCCEEDED, result: 42</text>
+
+    <rect x="360" y="10" width="330" height="50" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="370" y="30">new Function(TrustedScript)</text>
+    <text x="370" y="48" fill="#f85149">THREW — TT not supported at all</text>
+
+    <rect x="10" y="70" width="330" height="50" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="90">script.src = TrustedScriptURL</text>
+    <text x="20" y="108" fill="#3fb950">SUCCEEDED, child.js ran</text>
+
+    <rect x="360" y="70" width="330" height="50" rx="6" fill="#161b22" stroke="#e3b341"/>
+    <text x="370" y="90">script.text = TrustedScript</text>
+    <text x="370" y="108" fill="#e3b341">assigned OK, did NOT execute</text>
+
+    <rect x="10" y="130" width="680" height="50" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="150">fake object AND plain string → script.src</text>
+    <text x="20" y="168" fill="#f85149">BOTH threw, identical error text</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The surprise the browser told us about directly — <a href="server.js">server.js</a> / real console output:</p>
+<pre><code>new Function(policy.createScript('return 40 + 2'))
+// THREW: EvalError: Evaluating a string as JavaScript violates this
+// document's Trusted Type assignment requirements.
+//
+// console.info: "The JavaScript Function constructor does not accept
+// TrustedString arguments. See https://github.com/w3c/webappsec-trusted-types/
+// wiki/Trusted-Types-for-function-constructor for more information."</code></pre>
+<p>The test we had to fix after it silently tested the wrong thing:</p>
+<pre><code>// FIRST DRAFT (wrong): eval({ toString: () => '40 + 2' })
+// → "succeeded", returning the object itself — because eval() only ever
+//   evaluates STRING arguments; a non-string just passes through
+//   unevaluated. Nothing to do with Trusted Types at all.
+//
+// FIXED: test the fake against script.src instead, which we'd already
+// confirmed properly type-checks:
+s.src = { toString: () => '/child.js' };  // THREW, correctly</code></pre>
+<p>Full investigation trail for all three surprises in <a href="DECISIONS.md">DECISIONS.md</a>.</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Use the `Function` constructor AT ALL once `require-trusted-types-for` is active — real code relying on it needs a different pattern entirely</li>
+      <li>Assume every sink in a "family" behaves like its most-tested member — verified false in this exact module</li>
+      <li>Rely on `.text` assignment alone to get a dynamically-created script to run</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Use `eval` and `script.src` with real Trusted Types values, fully guarded and fully functional</li>
+      <li>Correctly warn a team relying on `new Function(...)` that Trusted Types adoption will break it outright, not just restrict it</li>
+      <li>Recognize when a "failure" is actually a separate, general DOM-mechanics question rather than a Trusted Types finding</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/19_script_sink_guard/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7600</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A (eval):             SUCCEEDED, result: 42
+Proof B (new Function):     THREW: EvalError: ... Trusted Type assignment
+                              requirements.
+Proof C (script.src):       SUCCEEDED, ... child.js executed via script.src
+Proof D (script.text):      SUCCEEDED, result: window.__scriptTextRan
+                              afterward: undefined
+Proof E (fake → script.src): THREW: TypeError: ... This document requires
+                              'TrustedScriptURL' assignment.
+Proof F (raw string → script.src): THREW — identical to Proof E</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof B SUCCEEDS in your browser, that would mean the `Function`
+  constructor's Trusted Types support has changed since this module was
+  verified — worth checking the W3C tracking link in the real console
+  message for current status, not assuming our result is stale without
+  checking.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A teammate says: "Since `script.text` accepted our `TrustedScript` value
+without throwing, Trusted Types must be broken for that sink — the guard
+passed something dangerous through without actually protecting us." Is
+that the right read of what this module found?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and separating the two facts (assignment succeeded; execution didn't
+happen) is exactly why this matters. The guard did its job completely
+correctly: it verified the value was a real, policy-produced `TrustedScript`
+and let it through — that's ALL Trusted Types ever promises for this sink.
+Whether the resulting script element then executes is governed by an
+entirely separate part of the HTML specification (the "prepare the script
+element" algorithm), which predates Trusted Types and applies identically
+whether Trusted Types exists or not. Conflating "the guard let it through"
+with "therefore something bad could happen" would be a real category
+error — the guard's job was narrowly and successfully accomplished; a
+DIFFERENT, unrelated browser mechanism is why nothing ran.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: If `Function()` doesn't support Trusted Types, does that mean code using it is completely unprotected under `require-trusted-types-for`?</div>
+  <p>The opposite, in a sense — it's MORE restricted, not less: `new Function(anything)` throws unconditionally once the directive is active, whether the argument is a dangerous raw string, a harmless raw string, or a perfectly valid `TrustedScript`. Code relying on the `Function` constructor simply can't run at all under this policy; it has no working path, safe or unsafe. That's arguably the safest possible outcome for an unsupported sink, just not a usable one.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why does `eval()` behave so differently from `Function()`, given they're both "evaluate a string as code"?</div>
+  <p>Historically and specification-wise, they're different mechanisms with different integration timelines into the Trusted Types spec — `eval`'s Trusted Types integration shipped and is enforced; `Function`'s (per the browser's own cited tracking issue) has not yet reached the same state in this engine. This is exactly the kind of platform-maturity gap you can only find by testing directly, not by assuming two similar-sounding APIs behave identically.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could a REAL app work around the `Function()` gap?</div>
+  <p>Not explored in this module (out of scope for a course focused on verified behavior, not workaround engineering) — but the realistic answer for a real team is to avoid `new Function(...)` entirely under a Trusted-Types policy and use `eval` (properly policy-gated) or, more commonly, avoid dynamic code generation altogether in favor of static, reviewed functions.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 20 restricts something this module and Modules 16-17 left completely
+open: WHICH policy names are even allowed to be created, via the
+<code>trusted-types</code> CSP directive.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../18_html_sink_guard/tutorial.html">← Module 18: HTML Sink Guard</a></div>
+  <div class="next"><a href="../20_policy_name_allowlist/tutorial.html">Module 20: Policy-Name Allowlist →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 19 of 24 (6 of 11 in Track 2)</footer>
+</body>
+</html>
