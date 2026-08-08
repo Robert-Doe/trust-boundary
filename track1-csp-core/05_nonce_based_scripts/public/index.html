@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 5 — Nonce-Based Scripts</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Module 5 — Nonce-Based Scripts</h1>
+  <p>This response's policy is <code>script-src 'self' 'nonce-{{NONCE}}'</code> —
+     a fresh random value generated for THIS request only.</p>
+
+  <div class="proof">
+    <b>Proof A — inline script WITH the correct nonce (predict: ALLOWED)</b>
+    <p id="correct-nonce-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — inline script with NO nonce attribute at all (predict: BLOCKED)</b>
+    <p id="no-nonce-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — inline script with a WRONG, hardcoded nonce (predict: BLOCKED)</b>
+    <p id="wrong-nonce-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof D — is the nonce actually different on every request?</b>
+    <p id="uniqueness-proof" class="result">(checking — fetching this same URL twice...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof A: has the real nonce injected by the server. -->
+  <script nonce="{{NONCE}}">
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      window.__cspViolations.push({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, sample: (e.sample || '').slice(0, 40) });
+    });
+    document.getElementById('correct-nonce-proof').textContent = 'ran — this script had the correct nonce';
+    document.getElementById('correct-nonce-proof').className = 'result allowed';
+  </script>
+
+  <!-- Proof B: no nonce attribute. -->
+  <script>
+    document.getElementById('no-nonce-proof').textContent = 'ran (should NOT happen — no nonce present)';
+    document.getElementById('no-nonce-proof').className = 'result allowed';
+  </script>
+
+  <!-- Proof C: a nonce attribute that does NOT match the header's value. -->
+  <script nonce="wrong-nonce-value-that-will-never-match">
+    document.getElementById('wrong-nonce-proof').textContent = 'ran (should NOT happen — nonce does not match)';
+    document.getElementById('wrong-nonce-proof').className = 'result allowed';
+  </script>
+
+  <!-- Proof D + violation log rendering: a same-origin EXTERNAL file. It
+       needs NO nonce attribute at all — 'self' already covers it, because
+       'self' matches by origin for external resources. Nonces only govern
+       INLINE script content; that distinction is deliberately shown here,
+       not just stated. -->
+  <script src="/wiring.js"></script>
+</body>
+</html>
