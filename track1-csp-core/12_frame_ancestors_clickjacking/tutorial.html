@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 12 — frame-ancestors Clickjacking Defense</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #e3b341; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 2 · Module 12</span>frame-ancestors Clickjacking Defense</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/03_csp_vocabulary.html#policy-vs-directive">policy-vs-directive</a>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#same-origin-policy">same-origin-policy</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Clickjacking is the digital version of a fake "sign here for the free
+sample" clipboard that's secretly stacked on top of a real loan agreement,
+with a tiny hole cut exactly where your signature needs to land. You think
+you're signing for a sample; you're actually signing the real document
+underneath, which was rendered completely normally — nothing about the
+document itself was tampered with, it was just invisibly stacked under
+something else. <code>frame-ancestors</code> is the real document simply
+refusing to be placed under anything else at all: no stacking, no hole, no
+attack surface.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>An attacker page on a different origin embeds two iframes, each pointing at a different route on the victim's origin.</li>
+  <li>For <code>/open</code> (no CSP), the victim server sends its response; the browser has no reason to refuse rendering it inside the frame, so it renders normally.</li>
+  <li>For <code>/protected</code>, the victim server sends the SAME response shape, plus <code>Content-Security-Policy: frame-ancestors 'none'</code>.</li>
+  <li>The browser receives that response (a real, successful 200) and then checks: is the current embedding context allowed by this response's own <code>frame-ancestors</code> value? <code>'none'</code> means no context at all is allowed.</li>
+  <li>The browser refuses to render the frame's content, logs a violation, and the network log shows the request failing AFTER a successful response — <code>net::ERR_BLOCKED_BY_RESPONSE</code>.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <rect x="10" y="20" width="320" height="150" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="170" y="45" text-anchor="middle" fill="#fff">iframe → /open</text>
+    <text x="25" y="75">GET /open</text>
+    <text x="25" y="95" fill="#3fb950">→ 200 OK</text>
+    <text x="25" y="115" fill="#3fb950">→ renders normally</text>
+    <text x="25" y="145" font-size="10" fill="#8b949e">(no frame-ancestors sent)</text>
+
+    <rect x="370" y="20" width="320" height="150" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="530" y="45" text-anchor="middle" fill="#fff">iframe → /protected</text>
+    <text x="385" y="75">GET /protected</text>
+    <text x="385" y="95" fill="#3fb950">→ 200 OK (response received)</text>
+    <text x="385" y="115" fill="#f85149">→ ERR_BLOCKED_BY_RESPONSE</text>
+    <text x="385" y="145" font-size="10" fill="#8b949e">(frame-ancestors 'none')</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The one header that changes everything — <a href="server.js">server.js</a>:</p>
+<pre><code>if (req.url === '/protected') {
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': "frame-ancestors 'none'",
+  });
+  return res.end(victimPage('/protected (frame-ancestors: none)'));
+}</code></pre>
+<p>Why we didn't try to prove this via reading the iframe's DOM — see <a href="DECISIONS.md">DECISIONS.md</a>; the real proof came from the network log and console instead:</p>
+<pre><code>GET http://localhost:6700/open      → 200 OK
+GET http://localhost:6700/protected → 200 OK [FAILED: net::ERR_BLOCKED_BY_RESPONSE]</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Deliver this same protection via `&lt;meta&gt;` — Module 9 already proved `frame-ancestors` is silently ignored there</li>
+      <li>Allow SPECIFIC trusted origins to frame the page while blocking everyone else — that needs `frame-ancestors https://trusted.example` instead of `'none'`, untested in this module</li>
+      <li>Stop an attacker from linking directly to your page (frame-ancestors only governs EMBEDDING, not navigation)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Completely prevent a page from being framed by any origin, closing the entire clickjacking attack surface for that page</li>
+      <li>Verify the block via real network status, not just trust the console message alone</li>
+      <li>Correctly explain WHY this defense has nothing to do with script-src/style-src at all</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/12_frame_ancestors_clickjacking/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:6800</code> (the attacker page). Real captured result, from the network tab:</p>
+<div class="run-block">
+  <div class="run-label">network log (verified)</div>
+  <pre><code>GET http://localhost:6700/open      → 200 OK
+GET http://localhost:6700/protected → 200 OK [FAILED: net::ERR_BLOCKED_BY_RESPONSE]</code></pre>
+</div>
+<div class="run-block">
+  <div class="run-label">console (verified)</div>
+  <pre><code>Framing 'http://localhost:6700/' violates the following Content Security
+Policy directive: "frame-ancestors 'none'". The request has been blocked.</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If BOTH iframes render successfully, check that <code>/protected</code>'s
+  response actually carries the header in your network tab's response
+  headers — and remember Module 9's finding: if you ever move this policy
+  into a <code>&lt;meta&gt;</code> tag by habit, <code>frame-ancestors</code>
+  specifically will be silently ignored there, with no visible failure on
+  the victim page itself, only a console warning.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+This module's older, simpler cousin is the <code>X-Frame-Options</code>
+header (values like <code>DENY</code> or <code>SAMEORIGIN</code>), which
+does roughly the same job and predates CSP. Given that
+<code>frame-ancestors</code> exists and does more (it can allowlist
+specific origins, not just same-origin-or-nobody), should a real site drop
+<code>X-Frame-Options</code> entirely once it adds
+<code>frame-ancestors</code>?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Not immediately, and the reasoning is pure defense-in-depth: browsers that
+don't understand `frame-ancestors` at all (very old, but some still exist
+in the wild depending on your users) will simply ignore that unrecognized
+directive and offer NO clickjacking protection at all if it's the only
+mechanism present. `X-Frame-Options` has near-universal support, even in
+browsers old enough to predate CSP entirely. Real-world guidance is
+typically to send both — `frame-ancestors` for browsers that understand it
+(more expressive, the modern standard), `X-Frame-Options` as a safety net
+for the ones that don't. This is a genuinely different kind of "send two
+things" than Module 8's policy intersection — these are two entirely
+separate HTTP headers using two entirely separate mechanisms, aimed at the
+same goal.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does `frame-ancestors 'none'` also stop the page from opening in a regular new tab, or being linked to directly?</div>
+  <p>No — `frame-ancestors` only governs being embedded as a frame/iframe/object inside another document. Navigating directly to the URL, clicking a normal link, or opening it in a new tab are unaffected; those aren't "framing" in the sense this directive checks.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why did the network log show `200 OK` and THEN a failure, instead of the browser refusing to even connect?</div>
+  <p>Because `frame-ancestors` is a property of the response the browser has to actually receive before it can check — the victim server doesn't know or care who's trying to frame it; it just serves its normal response with the policy attached, every time. The embedding browser is the one enforcing the rule, after the fact, based on the header it just received. That's a fundamentally different enforcement point than, say, a server that checked the `Referer` header and refused to respond at all — a real, older, much weaker anti-framing technique.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could the victim server have used `frame-ancestors 'self'` instead of `'none'` to allow framing itself?</div>
+  <p>Yes — `'self'` is a completely valid and common choice, useful for sites that legitimately embed their own pages in their own iframes (a preview pane, a multi-panel dashboard) but still want to block every OTHER origin. We used `'none'` here because this module's victim has no legitimate reason to ever be framed at all, making the strictest option the clearest demonstration.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 13 closes out Track 1 with two more structural directives:
+<code>form-action</code> (restricting where forms can submit to) and
+<code>base-uri</code> (preventing a `&lt;base&gt;` tag injection from
+hijacking every relative URL on the page).
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../11_csp_blocks_reflected_xss/tutorial.html">← Module 11: CSP Blocks Reflected XSS</a></div>
+  <div class="next"><a href="../13_form_action_base_uri/tutorial.html">Module 13: form-action + base-uri Lockdown →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 12 of 13</footer>
+</body>
+</html>
