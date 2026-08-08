@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: window.trustedTypes</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · The Trusted Types Directive Family</span>Concept: window.trustedTypes</h1>
+
+<div class="analogy-box">
+<p>
+This is the FACTORY COUNTER — the one JS global object every module since
+16 has called <code>.createPolicy()</code> on. Unlike the two CSP
+directives, this is a real, live JS object, reachable and inspectable like
+any other global (<code>typeof trustedTypes === 'object'</code>).
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>trustedTypes.createPolicy('name', { createHTML: (s) => s });
+trustedTypes.isHTML(someValue);      // type-checking helper
+trustedTypes.getPolicyNames();       // introspection (not used directly in this course)</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Every module since 16 — <code>trustedTypes.createPolicy(...)</code> is the entry point for everything Track 2's Phase 3 modules test</li>
+  <li>Module 24 — <code>DOMPurify.isSupported</code> internally checks for this global's presence to decide whether to use Trusted Types at all</li>
+</ul>
+
+<h2>What it is NOT</h2>
+<p>
+It is not itself a policy, a directive, or a branded type. It's the
+FACTORY that produces Trusted Types policy objects (see that term) — and
+unlike those two CSP directives, it exists and is inspectable purely as
+ordinary JavaScript, with or without any CSP header present at all (though
+without <code>require-trusted-types-for</code>, nothing enforces that its
+output is actually required anywhere).
+</p>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  <code>window.trustedTypes</code> is the JS-level entry point CSP's
+  <code>require-trusted-types-for</code>/<code>trusted-types</code>
+  directives govern access to. Calling
+  <code>trustedTypes.createPolicy()</code> is what produces a
+  <strong>Trusted Types policy</strong> object, whose <code>create*</code>
+  methods produce <strong>TrustedHTML</strong>/<strong>TrustedScript</strong>/
+  <strong>TrustedScriptURL</strong> values. See
+  <a href="concept_how_they_connect.html">the connection hub</a> for the
+  full chain.
+</div>
+
+<p>
+<a class="tag-link" href="concept_require_trusted_types_for.html">→ require-trusted-types-for</a>
+<a class="tag-link" href="concept_trusted_types_directive.html">→ trusted-types (directive)</a>
+<a class="tag-link" href="concept_trusted_branded_types.html">→ TrustedHTML / TrustedScript / TrustedScriptURL</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 20</a></footer>
+</body>
+</html>

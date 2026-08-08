@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: require-trusted-types-for</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · The Trusted Types Directive Family</span>Concept: require-trusted-types-for</h1>
+
+<div class="analogy-box">
+<p>
+This is the ON SWITCH. A CSP directive whose only defined value is the
+keyword <code>'script'</code> — present or absent, nothing in between.
+Its entire job is: "every guarded sink on this page must now receive
+branded values, not raw strings."
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>Content-Security-Policy: require-trusted-types-for 'script'</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Module 15 — introduced; with zero policies defined, EVERY guarded sink throws unconditionally</li>
+  <li>Modules 16–19 — the constant background condition every proof in those modules ran under</li>
+  <li>Module 24 — present in the final, real, shippable policy</li>
+</ul>
+
+<h2>What it does NOT do</h2>
+<p>
+It does not create any policy, authorize any policy name, or provide any
+sanitization logic itself. It's purely a switch — flipping it on with zero
+other Trusted Types setup makes every guarded sink permanently broken
+(Module 15's exact finding), not permissive.
+</p>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  <code>require-trusted-types-for</code> turns ON enforcement.
+  <code>trusted-types</code> (a DIFFERENT directive, next page) restricts
+  WHICH policy names may then be created to satisfy that enforcement.
+  Confusing the two is this vocabulary web's whole reason for existing —
+  see <a href="concept_how_they_connect.html">the connection hub</a>.
+</div>
+
+<p>
+<a class="tag-link" href="concept_trusted_types_directive.html">→ trusted-types (directive)</a>
+<a class="tag-link" href="concept_trustedtypes_global.html">→ window.trustedTypes</a>
+<a class="tag-link" href="concept_trusted_branded_types.html">→ TrustedHTML / TrustedScript / TrustedScriptURL</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 20</a></footer>
+</body>
+</html>

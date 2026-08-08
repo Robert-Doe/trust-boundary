@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: trusted-types (directive)</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · The Trusted Types Directive Family</span>Concept: trusted-types (directive)</h1>
+
+<div class="analogy-box">
+<p>
+This is the GUEST LIST. A CSP directive whose value is a space-separated
+list of exact policy NAMES (plus the special keywords
+<code>'allow-duplicates'</code> and <code>'none'</code>) — it decides who's
+allowed to call <code>createPolicy</code> successfully at all, and under
+which names.
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>Content-Security-Policy: trusted-types dompurify dompurify-policy 'allow-duplicates'</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Module 20 — introduced; a disallowed name throws <code>Policy "..." disallowed</code>, a reused name throws a DIFFERENT error, <code>already exists</code></li>
+  <li>Module 24 — needed TWO names simultaneously (DOMPurify's own internal <code>"dompurify"</code>, plus the course's own <code>"dompurify-policy"</code>) — a real bug caught by testing</li>
+</ul>
+
+<h2>What it does NOT do</h2>
+<p>
+It has no effect at all unless <code>require-trusted-types-for</code> is
+also present — allowlisting policy names is meaningless if nothing
+requires policies to be used in the first place. It also does not restrict
+what a policy's rules can DO, only whether the policy can be CREATED under
+that name.
+</p>
+
+<div class="callout warn">
+  <span class="label">The single most common naming mix-up in this course</span>
+  <code>require-trusted-types-for</code> and <code>trusted-types</code>
+  differ by exactly the words "require" and "for" — and by what they
+  actually do. Read them side by side, slowly, at least once:
+  <table>
+    <tr><th>Directive</th><th>Job</th></tr>
+    <tr><td><code>require-trusted-types-for 'script'</code></td><td>Turns ON enforcement, page-wide</td></tr>
+    <tr><td><code>trusted-types &lt;names&gt;</code></td><td>Restricts WHICH policy names may exist</td></tr>
+  </table>
+</div>
+
+<p>
+<a class="tag-link" href="concept_require_trusted_types_for.html">→ require-trusted-types-for</a>
+<a class="tag-link" href="concept_trustedtypes_global.html">→ window.trustedTypes</a>
+<a class="tag-link" href="concept_trusted_branded_types.html">→ TrustedHTML / TrustedScript / TrustedScriptURL</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 20</a></footer>
+</body>
+</html>

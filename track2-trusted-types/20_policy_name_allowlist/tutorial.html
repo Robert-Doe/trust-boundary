@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 20 — Policy-Name Allowlist</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 20</span>Policy-Name Allowlist</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../16_policy_factory/tutorial.html">Module 16: Policy Factory</a>
+  <a class="tag-link" href="../../track1-csp-core/03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Modules 16-19 assumed a trustworthy team writing every policy on the page.
+But a real page often loads third-party scripts — an ad script, an
+analytics snippet, a widget — that run with the SAME privileges as your
+own code. Without a name allowlist, any of them could call
+<code>trustedTypes.createPolicy('anything-they-want', { createHTML: (s) =>
+s })</code> — a policy that just echoes input unchanged, silently
+recreating Module 14's original unrestricted baseline. The
+<code>trusted-types</code> CSP directive is a guest list at the door: only
+names YOU pre-approved get let in as policies at all, no matter who's
+asking.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends <code>trusted-types approved-policy</code> alongside <code>require-trusted-types-for 'script'</code>.</li>
+  <li><code>trustedTypes.createPolicy('approved-policy', {...})</code> — a name on the list — succeeds.</li>
+  <li><code>trustedTypes.createPolicy('rogue-policy', {...})</code> — a name NOT on the list — throws immediately, with a specific "disallowed" error naming the rejected policy.</li>
+  <li>Attempting to create <code>'approved-policy'</code> a SECOND time throws too, but with different text — an "already exists" error, a completely separate rule from the allowlist check.</li>
+  <li>On a second route, the directive adds <code>'allow-duplicates'</code> — now the second <code>'approved-policy'</code> creation succeeds, while the still-disallowed <code>'rogue-policy'</code> attempt fails identically to before.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">trusted-types approved-policy</text>
+
+    <rect x="10" y="40" width="220" height="60" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="60">"approved-policy" (1st)</text>
+    <text x="20" y="82" fill="#3fb950">SUCCEEDED</text>
+
+    <rect x="240" y="40" width="220" height="60" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="250" y="60">"rogue-policy"</text>
+    <text x="250" y="82" fill="#f85149">THREW: disallowed</text>
+
+    <rect x="470" y="40" width="220" height="60" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="480" y="60">"approved-policy" (2nd)</text>
+    <text x="480" y="82" fill="#f85149">THREW: already exists</text>
+
+    <text x="10" y="130" fill="#fff">+ 'allow-duplicates' → "approved-policy" (2nd) now:</text>
+    <text x="10" y="150" fill="#3fb950">SUCCEEDED (allowlist check still applies to "rogue-policy" unchanged)</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Two different real errors for two different rules — <a href="server.js">server.js</a> / real console output:</p>
+<pre><code>trustedTypes.createPolicy('rogue-policy', {...});
+// THREW: Policy "rogue-policy" disallowed.
+
+trustedTypes.createPolicy('approved-policy', {...}); // 2nd time, no 'allow-duplicates'
+// THREW: Policy with name "approved-policy" already exists.</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Let a third-party script define its OWN policy under a name you didn't pre-approve</li>
+      <li>Use wildcard or pattern-based name matching — the directive only supports an exact list</li>
+      <li>Redefine an already-created policy's behavior later, unless `'allow-duplicates'` is explicitly present</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Restrict policy creation to an explicit, developer-controlled allowlist of names</li>
+      <li>Distinguish "name never allowed" from "name already claimed" as two independently-enforced rules</li>
+      <li>Opt into relaxed uniqueness (`'allow-duplicates'`) without also opening up the name allowlist itself</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/20_policy_name_allowlist/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Visit both routes at <code>http://localhost:7700</code>. Real captured results:</p>
+<div class="run-block">
+  <div class="run-label">verified</div>
+  <pre><code>/allowlist:
+  A: SUCCEEDED
+  B: THREW: Policy "rogue-policy" disallowed.
+  C: THREW: Policy with name "approved-policy" already exists.
+
+/allow-duplicates:
+  A: SUCCEEDED
+  B: THREW: Policy "rogue-policy" disallowed.  (unchanged)
+  C: SUCCEEDED  (only this changed)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof B unexpectedly succeeds, check for a stray `'none'` or missing
+  `trusted-types` directive entirely — WITHOUT the `trusted-types`
+  directive at all, `createPolicy` accepts any name (Module 16-19's
+  behavior), which looks identical to Proof B succeeding here but means
+  something different: the allowlist was never configured, not that it's
+  failing to enforce.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Why does `'allow-duplicates'` exist at all — under what real circumstance
+would a team WANT to permit the same policy name to be defined more than
+once, given that Module 16 already showed each `createPolicy` call
+executes a specific, deliberate rule function?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+The most realistic case is hot-reloading or repeated script execution
+during development, or a module/bundle that might legitimately be
+evaluated more than once in complex loading scenarios (e.g., loaded via two
+different `&lt;script&gt;` tags by accident, or a testing environment that
+re-runs setup code). Without `'allow-duplicates'`, a second, accidental
+`createPolicy` call with the same name is a hard error — which is exactly
+the RIGHT default for production (an unexpected second definition of a
+trusted policy's rules is worth treating as suspicious), but can be
+legitimately relaxed in contexts where re-execution is expected and
+harmless.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does `trusted-types` restrict the RULES a policy can define, or only its NAME?</div>
+  <p>Only the name — this module verified nothing about what `createHTML`/`createScript`/`createScriptURL` are allowed to DO. A policy named `'approved-policy'` with a rule that returns its input completely unchanged (no sanitization at all) is just as "approved" by this directive as one with careful sanitization. The allowlist controls WHO can define a policy under a given name, not WHAT that policy is allowed to do.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is `'none'` a real value for this directive?</div>
+  <p>Yes, per spec — `trusted-types 'none'` blocks policy creation entirely (no name would ever be accepted), which we didn't test directly in this module but follows the same "explicit allowlist, nothing implicit" pattern as everything else this directive does.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could a third-party script just... not call `createPolicy` and instead try to reuse an ALREADY-created policy object?</div>
+  <p>Only if it can reach a reference to that object — `createPolicy`'s return value is an ordinary JS object, and if your own code stores it on something globally reachable (like `window.myPolicy`), any script sharing that page's execution context could use it. This module's allowlist protects policy CREATION specifically; protecting an already-created policy object from misuse is a separate, ordinary JS-scoping concern, not something `trusted-types` addresses.</p>
+</div>
+
+<div class="callout">
+  <span class="label">Before you move on</span>
+  This module completes the full set of "trusted"-named terms this course
+  uses — four of them, all genuinely different. If
+  <code>require-trusted-types-for</code> vs. <code>trusted-types</code> vs.
+  <code>window.trustedTypes</code> vs. <code>TrustedHTML</code> is starting
+  to blur together, the vocabulary web disambiguates all four:
+  <a href="concept_how_they_connect.html">The Trusted Types Directive
+  Family, side by side →</a>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 21 closes out Phase 3 by proving policy-creation and sink-assignment
+violations surface through the same Reporting API pipeline Track 1's
+Module 10 already built and tested — full circle, same mechanism, a new
+category of event.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../19_script_sink_guard/tutorial.html">← Module 19: Script Sink Guard</a></div>
+  <div class="next"><a href="../21_violation_reporting/tutorial.html">Module 21: Trusted Types Violation Reporting →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 20 of 24 (7 of 11 in Track 2)</footer>
+</body>
+</html>

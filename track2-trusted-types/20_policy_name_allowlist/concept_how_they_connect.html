@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How They Connect: The Trusted Types Directive Family</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>
+  :root { --accent: #e3b341; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin: 1.5rem 0; }
+  .grid4 > div { border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; background: var(--bg-alt); }
+  .grid4 h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+  .grid4 .layer { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; }
+  @media (max-width: 760px) { .grid4 { grid-template-columns: 1fr 1fr; } }
+  .quiz-item { background: var(--bg-alt); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .quiz-item .q { font-weight: 700; margin-bottom: 0.6rem; }
+  .quiz-item summary { cursor: pointer; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · Hub</span>How the Trusted Types Directive Family Connects</h1>
+
+<p>
+Four names, all containing some form of "trusted" or "trust," all doing
+genuinely different jobs at genuinely different layers. This is the exact
+shape of confusion the course's own Prerequisites layer warned you about —
+here it is, disambiguated in full, now that you've used all four for real.
+</p>
+
+<h2>Definitions, Side by Side</h2>
+<div class="grid4">
+  <div>
+    <div class="layer">CSP directive · switch</div>
+    <h4>require-trusted-types-for</h4>
+    <p style="font-size:0.82rem">Turns enforcement ON for every guarded sink. Value is always <code>'script'</code>.</p>
+    <a class="tag-link" href="concept_require_trusted_types_for.html">Full page →</a>
+  </div>
+  <div>
+    <div class="layer">CSP directive · allowlist</div>
+    <h4>trusted-types</h4>
+    <p style="font-size:0.82rem">Restricts WHICH policy names may be created. A list of names + keywords.</p>
+    <a class="tag-link" href="concept_trusted_types_directive.html">Full page →</a>
+  </div>
+  <div>
+    <div class="layer">JS global · factory</div>
+    <h4>window.trustedTypes</h4>
+    <p style="font-size:0.82rem">The live JS object with <code>.createPolicy()</code> on it. Not a directive, not a value.</p>
+    <a class="tag-link" href="concept_trustedtypes_global.html">Full page →</a>
+  </div>
+  <div>
+    <div class="layer">JS value types</div>
+    <h4>TrustedHTML / Script / ScriptURL</h4>
+    <p style="font-size:0.82rem">The branded VALUES a policy produces, and the only things guarded sinks accept.</p>
+    <a class="tag-link" href="concept_trusted_branded_types.html">Full page →</a>
+  </div>
+</div>
+
+<h2>The Full Chain, In Order</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="#c9d1d9">
+    <rect x="10" y="10" width="330" height="50" rx="6" fill="#161b22" stroke="#7ee787"/>
+    <text x="175" y="40" text-anchor="middle">1. require-trusted-types-for 'script'</text>
+    <rect x="360" y="10" width="330" height="50" rx="6" fill="#161b22" stroke="#7ee787"/>
+    <text x="525" y="40" text-anchor="middle">2. trusted-types &lt;names&gt;</text>
+    <text x="350" y="80" text-anchor="middle" fill="#8b949e">both are HTTP-layer, decided BEFORE any page script runs</text>
+
+    <line x1="350" y1="90" x2="350" y2="115" stroke="#e3b341" stroke-width="2"/>
+
+    <rect x="180" y="120" width="330" height="50" rx="6" fill="#161b22" stroke="#db61a2"/>
+    <text x="345" y="150" text-anchor="middle">3. window.trustedTypes.createPolicy(name, rules)</text>
+    <text x="350" y="190" text-anchor="middle" fill="#8b949e">JS-layer — only succeeds if step 1+2 permit it</text>
+
+    <line x1="345" y1="200" x2="345" y2="220" stroke="#e3b341" stroke-width="2"/>
+
+    <rect x="180" y="225" width="330" height="30" rx="6" fill="#161b22" stroke="#ffa657"/>
+    <text x="345" y="245" text-anchor="middle">4. TrustedHTML / TrustedScript / TrustedScriptURL values</text>
+  </g>
+</svg>
+</div>
+
+<h2>Commonly Confused Pairs</h2>
+<table>
+<tr><th>Wrong statement</th><th>The correction</th></tr>
+<tr>
+  <td>"`trusted-types` turns Trusted Types on."</td>
+  <td>No — that's `require-trusted-types-for`. `trusted-types` alone, without the other directive, has no effect at all (nothing is enforced to check the allowlist against).</td>
+</tr>
+<tr>
+  <td>"`window.trustedTypes` IS a Trusted Types policy."</td>
+  <td>No — it's the FACTORY that creates policy objects. `window.trustedTypes.createPolicy(...)` returns a policy; the global itself is not one.</td>
+</tr>
+<tr>
+  <td>"A `TrustedHTML` value and the `innerHTML` sink are the same concept."</td>
+  <td>No — `TrustedHTML` is a value TYPE. `innerHTML` is a SINK (a property setter) that demands values of that type. One is data, one is a gate.</td>
+</tr>
+<tr>
+  <td>"If `require-trusted-types-for` is present, any policy name works."</td>
+  <td>Only if `trusted-types` is absent. If it's present, ONLY the names it lists succeed — verified directly in Module 20's Proof B.</td>
+</tr>
+</table>
+
+<h2>Scenario-Matching Quiz</h2>
+<div class="quiz-item">
+  <div class="q">1. A page has `require-trusted-types-for 'script'` but NO `trusted-types` directive at all. Can `trustedTypes.createPolicy('anything-i-want', {...})` succeed?</div>
+  <details><summary>Reveal answer</summary>Yes — with no `trusted-types` directive present, there's no name allowlist to fail against (Modules 16–19's exact setup, before Module 20 ever introduces the allowlist).</details>
+</div>
+<div class="quiz-item">
+  <div class="q">2. `policy.createHTML('&lt;b&gt;hi&lt;/b&gt;')` returns a value. Which TWO of the four terms on this page are directly involved in producing it?</div>
+  <details><summary>Reveal answer</summary>`window.trustedTypes` (the factory that made `policy` in the first place) and `TrustedHTML` (the type of the returned value). The two CSP directives aren't directly "involved" in this specific call — they already did their job earlier, by permitting `policy` to exist at all.</details>
+</div>
+<div class="quiz-item">
+  <div class="q">3. True or false: `trusted-types 'none'` and omitting `require-trusted-types-for` entirely have the same practical effect.</div>
+  <details><summary>Reveal answer</summary>False, in one specific way — omitting `require-trusted-types-for` means sinks accept plain strings normally (Module 14's baseline). `trusted-types 'none'` alongside an ACTIVE `require-trusted-types-for` means sinks still demand TrustedHTML/TrustedScript, but NO policy can ever be created to supply one — every guarded sink becomes permanently unusable, closer to Module 15's zero-policy state than to no enforcement at all.</details>
+</div>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 20</a></footer>
+</body>
+</html>

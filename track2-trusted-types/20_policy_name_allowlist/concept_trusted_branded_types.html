@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: TrustedHTML / TrustedScript / TrustedScriptURL</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · The Trusted Types Directive Family</span>Concept: TrustedHTML / TrustedScript / TrustedScriptURL</h1>
+
+<div class="analogy-box">
+<p>
+These are the STAMPED, APPROVED DOCUMENTS — the actual VALUES a policy's
+<code>create*</code> methods return, and the ONLY values a guarded sink
+will accept. Three distinct types for three distinct sink families: HTML
+sinks want <code>TrustedHTML</code>; <code>eval</code>/<code>Function</code>/
+<code>script.text</code> want <code>TrustedScript</code>;
+<code>script.src</code> wants <code>TrustedScriptURL</code>.
+</p>
+</div>
+
+<h2>What they look like</h2>
+<pre><code>policy.createHTML('...')       // → a TrustedHTML value
+policy.createScript('...')     // → a TrustedScript value
+policy.createScriptURL('...')  // → a TrustedScriptURL value
+
+trustedHTMLValue instanceof TrustedHTML;  // true for a REAL one</code></pre>
+
+<h2>Where you've seen them</h2>
+<ul>
+  <li>Module 16 — proved `createHTML`'s output is `instanceof TrustedHTML`, `typeof 'object'`, NOT `instanceof String`</li>
+  <li>Module 18 — proved the HTML sink family accepts a real `TrustedHTML` uniformly, rejects imitations</li>
+  <li>Module 19 — proved `TrustedScript`/`TrustedScriptURL` gate `eval` and `script.src` (with real gaps found in `Function()` and `.text`)</li>
+  <li>Module 22 — proved `instanceof TrustedHTML` can be spoofed, but the real sink guard can't</li>
+</ul>
+
+<div class="callout warn">
+  <span class="label">Don't confuse the type with the sink it guards</span>
+  <code>TrustedHTML</code> is a VALUE TYPE. <code>innerHTML</code> is a SINK
+  that demands values of that type. They're not the same word for the same
+  thing — a sink "requires TrustedHTML," it isn't itself called TrustedHTML.
+</div>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  These three types are what a <strong>Trusted Types policy</strong>'s
+  methods produce. Whether producing them is even possible at all depends
+  on the two CSP directives: <strong>require-trusted-types-for</strong>
+  (must be present for sinks to demand these types) and
+  <strong>trusted-types</strong> (must allowlist the policy name that
+  produces them). See <a href="concept_how_they_connect.html">the
+  connection hub</a> for the complete chain, start to finish.
+</div>
+
+<p>
+<a class="tag-link" href="concept_require_trusted_types_for.html">→ require-trusted-types-for</a>
+<a class="tag-link" href="concept_trusted_types_directive.html">→ trusted-types (directive)</a>
+<a class="tag-link" href="concept_trustedtypes_global.html">→ window.trustedTypes</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 20</a></footer>
+</body>
+</html>
