@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 2 — CSP Header Parser</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #56d364; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 2</span>CSP Header Parser</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/03_csp_vocabulary.html#policy-vs-directive">policy-vs-directive</a>
+  <a class="tag-link" href="../../prerequisites/03_csp_vocabulary.html#source-expression">source-expression</a>
+  <a class="tag-link" href="../01_no_policy_baseline/tutorial.html">Module 1: No-Policy Baseline</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+A CSP header is a sentence written in a very small, very rigid language —
+closer to a customs declaration form than to prose. Customs doesn't try to
+understand your intent; it reads field by field, in a fixed order, and if a
+field is blank it just moves to the next one. It doesn't judge whether your
+declared items make sense together — that's a different official's job,
+later, at a different desk.
+</p>
+<p>
+This module <em>is</em> that first customs officer. It reads the raw header
+string field by field (split on <code>;</code>, then on whitespace) and
+produces a clean form (a JS object) — nothing more. Whether the declared
+values actually get allowed through is Module 3's job, at a different desk,
+with the browser standing behind it.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li><code>parseCSP(headerValue)</code> receives the raw header string, e.g. <code>"default-src 'self'; script-src 'self' https://cdn.example.com"</code>.</li>
+  <li>Split the whole string on <code>;</code> → a list of raw directive chunks, some possibly empty (from <code>;;</code> or a trailing <code>;</code>).</li>
+  <li>For each chunk: trim it; if empty, skip it entirely.</li>
+  <li>Split the trimmed chunk on whitespace. Token 0 is the directive name; lowercase it. The rest of the tokens are source expressions, kept as-is.</li>
+  <li>If this directive name was already seen earlier in the same policy, drop this occurrence — first one wins.</li>
+  <li>Otherwise, store <code>name → [sources]</code> in the result object.</li>
+  <li>Return the finished object once every chunk has been processed.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 230" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="12" fill="#c9d1d9">
+    <text x="10" y="30" fill="#fff" font-size="13">"default-src 'self'; script-src 'self' https://cdn.example.com"</text>
+
+    <rect x="10" y="50" width="160" height="40" rx="6" fill="#161b22" stroke="#56d364"/>
+    <text x="90" y="75" text-anchor="middle">default-src 'self'</text>
+    <rect x="190" y="50" width="330" height="40" rx="6" fill="#161b22" stroke="#56d364"/>
+    <text x="355" y="75" text-anchor="middle">script-src 'self' https://cdn.example.com</text>
+
+    <text x="10" y="120" fill="#8b949e">split(';') then trim then split(/\s+/) on each →</text>
+
+    <rect x="10" y="140" width="660" height="70" rx="8" fill="#010409" stroke="#30363d"/>
+    <text x="30" y="165" fill="#ffa657">{</text>
+    <text x="45" y="185">"default-src": ["'self'"],</text>
+    <text x="45" y="200">"script-src": ["'self'", "https://cdn.example.com"]</text>
+    <text x="30" y="205" fill="none"/>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The whole parser — <a href="src/csp-parser.js">src/csp-parser.js</a>:</p>
+<pre><code>for (const raw of rawDirectives) {
+  const trimmed = raw.trim();
+  if (trimmed === '') continue; // rule 4
+
+  const tokens = trimmed.split(/\s+/); // rule 2
+  const name = tokens[0].toLowerCase(); // rule 3
+  const sources = tokens.slice(1);
+
+  if (Object.prototype.hasOwnProperty.call(policy, name)) continue; // rule 5
+
+  policy[name] = sources;
+}</code></pre>
+<p>
+Every numbered rule comment traces back to the CSP spec, not to our
+preference — see <a href="DECISIONS.md">DECISIONS.md</a> for the exact
+spec-vs-convention breakdown of every line.
+</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Actually block anything — this runs in Node, no browser involved</li>
+      <li>Know whether a real browser follows the same duplicate-directive rule</li>
+      <li>Combine two separate policy headers together (Module 8)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Turn any syntactically valid CSP header string into a reliable data structure</li>
+      <li>Handle malformed whitespace/semicolons the same way the spec says a browser must</li>
+      <li>Give Module 3 something real to build a server-side policy builder on top of</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/02_csp_header_parser/</div>
+  <pre><code>node test/run-tests.js</code></pre>
+</div>
+<div class="run-block">
+  <div class="run-label">stdout (captured, real)</div>
+  <pre><code>PASS  basic multi-directive parse
+PASS  irregular whitespace is normalized
+PASS  duplicate directive name: first occurrence wins, second is ignored
+PASS  empty directives from stray/doubled semicolons are skipped
+PASS  directive names are case-insensitive, normalized to lowercase
+PASS  a directive with zero source expressions (e.g. sandbox with no args) parses to an empty array
+
+6/6 tests passed</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If you see a <code>MODULE_NOT_FOUND</code> error, you're running the
+  command from the wrong directory — it must be run from
+  <code>02_csp_header_parser/</code> itself, since the test file does
+  <code>require('../src/csp-parser')</code> as a relative path.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Given <code>parseCSP("script-src 'self'; script-src *")</code>, our parser
+returns <code>{"script-src": ["'self'"]}</code> — the stricter first
+occurrence wins, the looser <code>*</code> is dropped. Now suppose an
+attacker who controls <em>part</em> of your response headers (say, through a
+header-injection bug elsewhere in your stack) could append
+<code>; script-src *</code> to your existing policy. Could they use that to
+loosen your CSP?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and this is exactly why "first occurrence wins" is the safer of the two
+possible spec choices. If it were "last occurrence wins" instead, appending
+a second <code>script-src *</code> to the end of a header would silently
+override your real policy with a wide-open one. Because the spec chose
+first-wins, an attacker who can only <em>append</em> to your header (not
+rewrite the whole thing) can only add directives that get ignored if you
+already declared them — they can't loosen anything you already restricted.
+They could still add a brand-new directive you never set at all, though,
+which is why this is a mitigation for one specific injection shape, not a
+substitute for stopping header injection in the first place.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why not use a real parsing library or regex-only one-liner?</div>
+  <p>A one-liner regex could match the happy path, but "first duplicate directive wins" and "empty chunks are skipped" are stateful rules that need a loop with memory, not a single pattern match. Writing it by hand also means every rule has a comment pointing at *why* it exists — a borrowed library wouldn't teach you anything.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does this parser validate that `'self'` or `https://cdn.example.com` are well-formed source expressions?</div>
+  <p>No, deliberately. It stores whatever token appears after the directive name, even garbage like <code>'slef'</code> (a typo). Validating *shape* is a different, optional concern this module doesn't need to solve — Module 3 only cares whether a given load matches a source expression, and a malformed one simply never matches anything, which is a safe failure mode.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: What happens with an empty string input, `parseCSP("")`?</div>
+  <p>Try tracing it through the code: <code>"".split(';')</code> is <code>[""]</code>, the single chunk trims to <code>""</code>, which the empty check skips — so it returns <code>{}</code>. An empty policy object, not a crash. That matters because a server that accidentally sends an empty CSP header should be treated as "no directives declared," not blow up Module 3's code that consumes this output.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is "first occurrence wins" something we could double check for ourselves?</div>
+  <p>Yes — and we do, for real, in <a href="../03_directive_enforcement/tutorial.html">Module 3</a>, by sending an actual header with a duplicated directive to a real browser and observing which one gets enforced, rather than trusting the spec text alone.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 3 takes this exact parser's output shape and does something Module 2
+never touches: it sends real <code>Content-Security-Policy</code> headers
+from a real server and watches a real browser enforce them — blocking some
+of Module 1's four proofs while leaving others intact. That's where "parsed
+correctly" turns into "actually restricts something."
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../01_no_policy_baseline/tutorial.html">← Module 1: No-Policy Baseline</a></div>
+  <div class="next"><a href="../03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 2 of 13</footer>
+</body>
+</html>
