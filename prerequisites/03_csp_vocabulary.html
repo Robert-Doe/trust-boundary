@@ -1,0 +1,71 @@
+<title>Prereq: CSP Vocabulary</title>
+<link rel="stylesheet" href="../assets/course.css">
+<style>:root { --accent: #bc8cff; }</style>
+
+<h1><span class="module-kicker">Prerequisites</span>CSP Vocabulary</h1>
+
+<p>
+Three nouns get used constantly and precisely throughout Track 1. Get them
+straight now — the modules will not redefine them.
+</p>
+
+<h2 id="policy-vs-directive">Policy vs. Directive</h2>
+<pre><code>Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.example.com; img-src *
+└──────────────┬───────┘ └─────────┬────────┘ └──────────────────┬─────────────────┘ └────┬───┘
+          header name          directive 1              directive 2                  directive 3
+└─────────────────────────────────────value = the "policy"──────────────────────────────────────┘</code></pre>
+<ul>
+  <li>A <strong>policy</strong> is the entire header value: one or more directives, separated by <code>;</code>.</li>
+  <li>A <strong>directive</strong> is one name + source-list pair, e.g. <code>script-src 'self' https://cdn.example.com</code>.</li>
+</ul>
+<p>
+Directive names fall into families: <code>*-src</code> directives (<code>script-src</code>,
+<code>style-src</code>, <code>img-src</code>, <code>connect-src</code>, …) control where
+resources of that type may load from; a few directives (<code>frame-ancestors</code>,
+<code>form-action</code>, <code>base-uri</code>, <code>require-trusted-types-for</code>)
+control structural behaviors that aren't about resource loading at all.
+</p>
+
+<h2 id="source-expression">Source expression</h2>
+<p>
+Each directive's value is a space-separated list of <strong>source
+expressions</strong> — the individual things that are allowed. A source
+expression is one of:
+</p>
+<table>
+  <tr><th>Form</th><th>Example</th><th>Matches</th></tr>
+  <tr><td>Host</td><td><code>https://cdn.example.com</code></td><td>that exact origin</td></tr>
+  <tr><td>Scheme</td><td><code>https:</code></td><td>anything loaded over HTTPS, any host</td></tr>
+  <tr><td>Wildcard host</td><td><code>*.example.com</code></td><td>any subdomain of example.com</td></tr>
+  <tr><td>Keyword</td><td><code>'self'</code></td><td>the page's own origin — see below</td></tr>
+  <tr><td>Nonce</td><td><code>'nonce-r4nd0m'</code></td><td>an inline element carrying a matching <code>nonce="r4nd0m"</code> attribute</td></tr>
+  <tr><td>Hash</td><td><code>'sha256-abc...'</code></td><td>an inline element whose exact byte content hashes to that value</td></tr>
+</table>
+
+<h2 id="keyword-sources">The keyword sources you'll see constantly</h2>
+<table>
+  <tr><th>Keyword</th><th>Meaning</th></tr>
+  <tr><td><code>'self'</code></td><td>same origin as the document (scheme+host+port, exactly)</td></tr>
+  <tr><td><code>'none'</code></td><td>nothing is allowed for this directive, full stop</td></tr>
+  <tr><td><code>'unsafe-inline'</code></td><td>allow inline <code>&lt;script&gt;</code>/<code>&lt;style&gt;</code> and inline event handlers — named "unsafe" because it defeats most of CSP's XSS protection</td></tr>
+  <tr><td><code>'unsafe-eval'</code></td><td>allow <code>eval</code>, <code>new Function()</code>, and string-form <code>setTimeout</code></td></tr>
+</table>
+
+<h2 id="directive-inheritance">Fallback: how <code>default-src</code> works</h2>
+<p>
+<code>default-src</code> is not a "master switch" — it's a <strong>fallback
+value</strong>. If a specific <code>*-src</code> directive (like
+<code>script-src</code>) is absent from the policy, the browser uses
+<code>default-src</code>'s value for it instead. The moment you write an
+explicit <code>script-src</code>, it fully replaces <code>default-src</code>
+for scripts — the two are never merged together.
+</p>
+<div class="callout warn">
+  <span class="label">Common misreading</span>
+  <code>default-src 'self'; script-src https://cdn.example.com</code> does
+  <strong>not</strong> mean "scripts can come from 'self' OR the CDN." The
+  explicit <code>script-src</code> completely overrides the fallback for
+  scripts — only the CDN is allowed, not <code>'self'</code>.
+</div>
+
+<footer class="course-footer">Prerequisites Layer · <a href="index.html">Back to Prerequisites</a></footer>

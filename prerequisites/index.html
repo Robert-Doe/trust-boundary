@@ -1,0 +1,58 @@
+<title>Prerequisites — CSP &amp; Trusted Types Course</title>
+<link rel="stylesheet" href="../assets/course.css">
+<style>:root { --accent: #bc8cff; }</style>
+
+<h1><span class="module-kicker">Prerequisites Layer</span>Before You Touch Any Module</h1>
+
+<p>
+This course never re-teaches these four ideas inside a module — every module
+tutorial links back here with a small tag like
+<a class="tag-link" href="01_http_headers_and_origins.html#origin-triple">origin-triple</a>
+instead. Read all four now, once, and the modules will move fast because they
+don't have to stop and explain fundamentals every time one comes up.
+</p>
+
+<div class="callout warn">
+  <span class="label">Platform note</span>
+  Trusted Types (Track 2) is currently implemented only in Chromium-based
+  browsers (Chrome, Edge, Opera, Brave). Every Track 2 module assumes you're
+  running one of those. Track 1 (CSP) works in any modern browser.
+</div>
+
+<h2>The Four Primitives</h2>
+
+<ol class="step-list">
+  <li>
+    <strong><a href="01_http_headers_and_origins.html">HTTP Headers &amp; Origins</a></strong><br>
+    What a response header actually is on the wire, and what "origin" means to
+    a browser's trust model. Every CSP directive is enforced against an origin,
+    not a URL — you need this distinction before Module 1.
+  </li>
+  <li>
+    <strong><a href="02_dom_sinks.html">DOM Sinks</a></strong><br>
+    The handful of DOM APIs that turn a string into live markup or running
+    code (<code>innerHTML</code>, <code>eval</code>, <code>document.write</code>,
+    script <code>src</code>). Both CSP and Trusted Types exist to control what
+    reaches these APIs.
+  </li>
+  <li>
+    <strong><a href="03_csp_vocabulary.html">CSP Vocabulary</a></strong><br>
+    Policy, directive, source expression — the exact nouns every CSP module
+    will use precisely and never redefine.
+  </li>
+  <li>
+    <strong><a href="04_js_prototype_chain.html">The JS Prototype Chain</a></strong><br>
+    How <code>instanceof</code> actually works under the hood. This is the one
+    that pays off latest (Track 2, Phase 4) but is cheapest to learn now,
+    before you have a Trusted Types mental model to unlearn.
+  </li>
+</ol>
+
+<h2>How to use this layer</h2>
+<p>
+Don't try to memorize these pages. Skim them once so the vocabulary is
+familiar, then come back to a specific anchor whenever a module's tag-link
+sends you here. That's the intended workflow for the whole course.
+</p>
+
+<footer class="course-footer">Prerequisites Layer · CSP &amp; Trusted Types Course</footer>

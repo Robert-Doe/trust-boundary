@@ -1,0 +1,118 @@
+<title>Prereq: The JS Prototype Chain</title>
+<link rel="stylesheet" href="../assets/course.css">
+<style>:root { --accent: #bc8cff; }</style>
+
+<h1><span class="module-kicker">Prerequisites</span>The JS Prototype Chain</h1>
+
+<p>
+This page pays off latest — you won't need it until Track 2, Phase 4 (Modules
+22-23), where it explains why a Trusted Types object can't be faked by
+handing a sink a plain object that merely <em>looks</em> the same. Learn it
+now anyway, before you have a Trusted Types mental model to unlearn.
+</p>
+
+<h2 id="what-is-a-prototype">What a "prototype" actually is</h2>
+<p>
+Every JS object has one hidden internal link to another object, called its
+<strong>prototype</strong>. When you read a property that isn't found
+directly on the object, the engine doesn't give up — it looks at the
+object's prototype, then that object's prototype, and so on, until it finds
+the property or runs out of links.
+</p>
+<pre><code>function Animal(name) { this.name = name; }
+Animal.prototype.speak = function () { return this.name + ' makes a noise'; };
+
+const dog = new Animal('Rex');
+
+dog.name;    // 'Rex'  — found directly ON dog
+dog.speak(); // 'Rex makes a noise' — NOT on dog; found on Animal.prototype</code></pre>
+<p>
+Verified in Node:
+</p>
+<div class="run-block">
+  <div class="run-label">node -e "..." → actual stdout</div>
+  <pre><code>dog.__proto__ === Animal.prototype: true
+dog instanceof Animal: true
+speak found via chain: Rex makes a noise</code></pre>
+</div>
+
+<h2 id="prototype-chain-walk">The chain, drawn out</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 640 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#bc8cff"/>
+    </marker>
+  </defs>
+  <g font-family="JetBrains Mono, monospace" font-size="13" fill="#c9d1d9">
+    <rect x="10" y="70" width="110" height="50" rx="6" fill="#161b22" stroke="#bc8cff"/>
+    <text x="65" y="90" text-anchor="middle" fill="#fff">dog</text>
+    <text x="65" y="108" text-anchor="middle" font-size="11" fill="#8b949e">{name:'Rex'}</text>
+
+    <rect x="180" y="70" width="150" height="50" rx="6" fill="#161b22" stroke="#bc8cff"/>
+    <text x="255" y="90" text-anchor="middle" fill="#fff">Animal.prototype</text>
+    <text x="255" y="108" text-anchor="middle" font-size="11" fill="#8b949e">{speak: fn}</text>
+
+    <rect x="390" y="70" width="150" height="50" rx="6" fill="#161b22" stroke="#bc8cff"/>
+    <text x="465" y="90" text-anchor="middle" fill="#fff">Object.prototype</text>
+    <text x="465" y="108" text-anchor="middle" font-size="11" fill="#8b949e">{toString, ...}</text>
+
+    <rect x="580" y="80" width="50" height="30" rx="6" fill="#0d1117" stroke="#f85149"/>
+    <text x="605" y="100" text-anchor="middle" fill="#f85149">null</text>
+
+    <line x1="120" y1="95" x2="178" y2="95" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="330" y1="95" x2="388" y2="95" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="540" y1="95" x2="578" y2="95" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <text x="150" y="55" text-anchor="middle" font-size="11" fill="#8b949e">[[Prototype]]</text>
+    <text x="360" y="55" text-anchor="middle" font-size="11" fill="#8b949e">[[Prototype]]</text>
+    <text x="558" y="55" text-anchor="middle" font-size="11" fill="#8b949e">[[Prototype]]</text>
+  </g>
+</svg>
+</div>
+<p>
+Verified: <code>Object.getPrototypeOf(Animal.prototype) === Object.prototype</code>
+→ <code>true</code>. <code>Object.getPrototypeOf(Object.prototype)</code> →
+<code>null</code>, which is where every chain terminates.
+</p>
+
+<h2 id="instanceof-mechanics"><code>instanceof</code> is a chain walk, nothing more</h2>
+<p>
+<code>a instanceof B</code> walks <code>a</code>'s prototype chain asking,
+at each link, "is this exact object <code>=== B.prototype</code>?" It
+returns <code>true</code> the moment it finds a match, <code>false</code> if
+it reaches <code>null</code> first. That's the entire algorithm — no type
+name, no string tag, no declared "class" is consulted.
+</p>
+<p>This has a sharp consequence, verified in Node:</p>
+<div class="run-block">
+  <div class="run-label">node -e "..." → actual stdout</div>
+  <pre><code>const fake = { name: 'Rex', speak: function(){ return 'fake' } };
+fake instanceof Animal: false
+
+const forged = Object.create(Animal.prototype);
+forged instanceof Animal: true</code></pre>
+</div>
+<p>
+<code>fake</code> has the exact same shape as a real <code>Animal</code> —
+same property names, a working <code>speak</code> method — and still fails
+<code>instanceof</code>, because its prototype link doesn't point at
+<code>Animal.prototype</code>. Meanwhile <code>forged</code>, an object with
+<em>no</em> real construction history at all, <strong>passes</strong>
+<code>instanceof Animal</code>, because <code>Object.create(Animal.prototype)</code>
+sets exactly the one link the check cares about. <code>instanceof</code>
+verifies a <em>link</em>, not an origin story.
+</p>
+
+<div class="callout warn">
+  <span class="label">Why this matters later</span>
+  If a browser API decided whether to trust a value using only
+  <code>instanceof TrustedHTML</code>, the second example above shows the
+  hole: any script that can reach <code>TrustedHTML.prototype</code> could
+  forge a "trusted" value with <code>Object.create</code>. Real Trusted Types
+  objects are <em>not</em> actually distinguished by a reachable prototype
+  check alone — Module 22 shows you the real mechanism, and Module 23 shows
+  exactly which forgery attempts it defeats and why.
+</div>
+
+<footer class="course-footer">Prerequisites Layer · <a href="index.html">Back to Prerequisites</a></footer>

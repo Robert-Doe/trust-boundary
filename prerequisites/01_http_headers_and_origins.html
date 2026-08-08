@@ -1,0 +1,71 @@
+<title>Prereq: HTTP Headers &amp; Origins</title>
+<link rel="stylesheet" href="../assets/course.css">
+<style>:root { --accent: #bc8cff; }</style>
+
+<h1><span class="module-kicker">Prerequisites</span>HTTP Headers &amp; Origins</h1>
+
+<h2 id="http-request-response">What a response header is</h2>
+<p>
+When a browser asks a server for a page, the server's reply has two parts:
+a block of <strong>headers</strong> (plain-text <code>Name: value</code> lines)
+and then the <strong>body</strong> (the actual HTML/JS/image bytes). Headers
+are metadata about the body — they never appear on the rendered page, and
+JavaScript on the page can't read most of them either. A raw response looks
+like this on the wire:
+</p>
+<pre><code>HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Content-Security-Policy: default-src 'self'
+Content-Length: 512
+
+&lt;!doctype html&gt;
+&lt;html&gt;...&lt;/html&gt;</code></pre>
+<p>
+<code>Content-Security-Policy</code> is just one more header line. The browser
+parses its value <em>before</em> it starts executing anything in the body.
+That ordering is the whole reason CSP can act as a gate: policy arrives before
+any script from the body has had a chance to run.
+</p>
+
+<h2 id="origin-triple">The origin triple</h2>
+<p>
+A browser's most important trust boundary is the <strong>origin</strong>:
+the exact combination of <strong>scheme</strong>, <strong>host</strong>, and
+<strong>port</strong>.
+</p>
+<pre><code>https://example.com:443/path?query
+└──┬──┘ └────┬─────┘ └┬┘
+ scheme     host      port
+
+Origin = (scheme, host, port)  →  ("https", "example.com", 443)</code></pre>
+<p>
+Two URLs are <strong>same-origin</strong> only if all three match exactly.
+All of these are <em>different</em> origins from <code>https://example.com</code>:
+</p>
+<table>
+  <tr><th>URL</th><th>Why it differs</th></tr>
+  <tr><td><code>http://example.com</code></td><td>scheme differs (http vs https)</td></tr>
+  <tr><td><code>https://example.com:8443</code></td><td>port differs</td></tr>
+  <tr><td><code>https://api.example.com</code></td><td>host differs (subdomain counts as a different host)</td></tr>
+</table>
+
+<h2 id="same-origin-policy">The Same-Origin Policy (the default, before any CSP exists)</h2>
+<p>
+Before you add a single security header, the browser already enforces a
+baseline rule called the <strong>Same-Origin Policy (SOP)</strong>: a script
+running on origin A cannot read data (DOM, cookies, response bodies, local
+storage) belonging to origin B. This is why, for example, a tab open to your
+bank can't have its JS read the DOM of a tab open to a different site.
+</p>
+<div class="callout">
+  <span class="label">What SOP does <em>not</em> restrict</span>
+  SOP restricts <em>reading</em> cross-origin data. It does <em>not</em>, by
+  itself, stop your page from <em>loading</em> a script, image, or stylesheet
+  from another origin, and it does not stop an inline <code>&lt;script&gt;</code>
+  from running just because an attacker injected it into your HTML. That gap —
+  "same-origin doesn't mean same-trust" — is exactly the gap CSP was invented
+  to close. You'll watch this gap get exploited, live, in Module 1 and closed
+  in Module 3.
+</div>
+
+<footer class="course-footer">Prerequisites Layer · <a href="index.html">Back to Prerequisites</a></footer>
