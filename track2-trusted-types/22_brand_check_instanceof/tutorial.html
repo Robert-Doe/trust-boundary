@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 22 — Brand Check via instanceof</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 4 · Module 22</span>Brand Check via instanceof</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/04_js_prototype_chain.html">js-prototype-chain</a>
+  <a class="tag-link" href="../18_html_sink_guard/tutorial.html">Module 18: HTML Sink Guard</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Recall the prerequisites layer's wristband analogy: <code>instanceof</code>
+only checks whether a specific chain of links leads to a specific known
+object — it's a paperwork check, not a physical one. A forged employee ID
+badge can have the exact right barcode format, the exact right printed logo,
+even be laminated with the exact right hologram sticker if you know where
+to buy one — paperwork checks (matching an expected pattern) can be
+reproduced. What can't be reproduced without the real, physical
+manufacturing process is something like an embedded RFID chip that a
+badge reader queries directly — no visual inspection or paperwork trick
+recreates the actual chip. This module found exactly that distinction,
+for real: <code>instanceof</code> is the paperwork check (spoofable, and we
+proved it), and the sink's actual guard is the RFID reader
+(unspoofable, and we proved that too).
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A real policy produces a real <code>TrustedHTML</code> value. It passes <code>instanceof TrustedHTML</code>, and its prototype is confirmed to literally be <code>TrustedHTML.prototype</code>.</li>
+  <li>A forged object is built with <code>Object.create(TrustedHTML.prototype)</code> — the exact construction the prerequisites page warned about — giving it the identical prototype link, with zero involvement from any policy.</li>
+  <li><code>forged instanceof TrustedHTML</code> is checked: <strong>true</strong>. The JS-level check is successfully spoofed.</li>
+  <li>The forged object is handed to <code>innerHTML</code> anyway. It throws — but with a DIFFERENT error than every prior rejection in this course: <code>"Illegal invocation"</code>, not <code>"This document requires 'TrustedHTML' assignment."</code></li>
+  <li>Every own property of the real value is inspected and copied onto an even-more-elaborate forgery. There's nothing to copy — a real <code>TrustedHTML</code> has zero own enumerable properties. The elaborate forgery is rejected identically anyway.</li>
+  <li>The forged rejection is checked against Module 21's violation-reporting pipeline: no event fires. It's a different kind of failure entirely.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="100" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="12">real (policy.createHTML(...))</text>
+    <text x="25" y="65">instanceof TrustedHTML: true</text>
+    <text x="25" y="85">internal slot: PRESENT (real data)</text>
+    <text x="25" y="105" fill="#3fb950">sink: ACCEPTED</text>
+
+    <rect x="360" y="20" width="330" height="100" rx="8" fill="#161b22" stroke="#e3b341" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="12">forged (Object.create(...))</text>
+    <text x="375" y="65">instanceof TrustedHTML: true (!)</text>
+    <text x="375" y="85">internal slot: ABSENT</text>
+    <text x="375" y="105" fill="#f85149">sink: REJECTED (Illegal invocation)</text>
+
+    <text x="10" y="150" fill="#fff">Prototype chain (identical for both):</text>
+    <text x="10" y="170" fill="#8b949e">value → TrustedHTML.prototype → Object.prototype → null</text>
+    <text x="10" y="200" fill="#e3b341">↑ instanceof walks THIS chain — identical for real and forged</text>
+    <text x="10" y="225" fill="#3fb950">↑ the sink's real check queries an INTERNAL SLOT — not on this chain at all</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The forgery, byte-for-byte the prerequisites page's construction — <a href="server.js">server.js</a>:</p>
+<pre><code>const forged = Object.create(TrustedHTML.prototype);
+forged instanceof TrustedHTML;  // true — spoofed successfully</code></pre>
+<p>What actually happens at the sink — real, captured error text:</p>
+<pre><code>document.createElement('div').innerHTML = forged;
+// THREW: TypeError: Failed to set the 'innerHTML' property on 'Element':
+//         Illegal invocation
+//
+// Compare Module 15's error for a value that ISN'T even trying to pretend:
+// THREW: TypeError: Failed to set the 'innerHTML' property on 'Element':
+//         This document requires 'TrustedHTML' assignment.
+// ← genuinely different message. Different code path.</code></pre>
+<p>The property-copying attempt that had nothing to copy:</p>
+<pre><code>Object.getOwnPropertyNames(real);  // []  — the real value's actual string
+                                    //      data isn't a JS property at all</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Name the exact spec mechanism ("internal slot") with full precision, or test what happens across realms/iframes — Module 23's job</li>
+      <li>Explain why "Illegal invocation" specifically is the error text browsers use for this class of failure</li>
+      <li>Assume EVERY Trusted-Types-adjacent rejection reports through Module 21's pipeline — this module found one that doesn't</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>State precisely, with real evidence, that `instanceof` is spoofable and the real guard is something else</li>
+      <li>Distinguish "prototype-chain identity" from "internal slot presence" as two genuinely different, independently-testable properties of an object</li>
+      <li>Recognize "Illegal invocation" as this course's signal for "wrong receiver type at the native binding layer," distinct from every prior error message</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/22_brand_check_instanceof/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:8000</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — real instanceof TrustedHTML: true / sink accepted it: true
+Proof B — forged instanceof TrustedHTML: true  ← passes the JS-level check!
+          sink result: REJECTED: TypeError: ... Illegal invocation
+Proof C — own property names copied: []
+          sink result: REJECTED (identical error)
+Proof D — securitypolicyviolation fired for the forged-object rejection: null</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof B's forged object is ACCEPTED by the sink in your environment,
+  that would be a genuinely significant finding worth investigating
+  further, not dismissing — it would mean this specific browser's
+  implementation checks something weaker than what we verified here.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Module 18 already showed a duck-typed object (<code>{ toString: () =>
+'...' }</code>) gets rejected by the sink. This module's forged object goes
+further — it even has the CORRECT prototype, passing `instanceof`. Why did
+we bother building the more sophisticated forgery, if the simpler one
+already failed?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Because the simple duck-typed object failing proves less than it might
+seem to. A plain `{ toString: ... }` object fails `instanceof TrustedHTML`
+too — so Module 18 couldn't tell you WHICH check rejected it: could have
+been the type check, could have been the prototype check, could have been
+something else. This module deliberately built a forgery that passes the
+prototype check specifically, so that if the sink accepted it, we'd have
+learned the sink really does rely on `instanceof`-equivalent logic — and if
+it still rejected it (which is what we found), we've isolated something
+much stronger: the guard survives even when the ONE check `instanceof`
+performs is satisfied. That's a categorically stronger claim than Module
+18 alone could support.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: If `instanceof` can be fooled, is it ever meaningful to check `x instanceof TrustedHTML` in real code?</div>
+  <p>Yes, for ordinary, non-adversarial purposes — like checking a value's type before deciding how to log it, or for a lint rule flagging obviously-wrong usage. What this module shows is narrower and sharper: `instanceof` is not SECURITY-meaningful — it can't be trusted to gate a dangerous operation, because it can be satisfied by an object that never went through any policy at all. The browser's own sink implementation makes exactly that distinction, which is why it doesn't rely on `instanceof` either.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why does a real `TrustedHTML` have ZERO own properties — where does the actual HTML string live?</div>
+  <p>In an internal slot — a piece of state the spec defines as existing on the object, but which is not exposed as an ordinary, enumerable, copyable JS property. `String(trustedValue)` (Module 16) can read it out via a specific, defined `toString()` behavior, but `Object.keys()`, `Object.getOwnPropertyNames()`, spreading the object, or `JSON.stringify()` all see nothing, because none of those mechanisms have access to internal slots — only specific, spec-defined operations do.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does "Illegal invocation" mean the same thing everywhere you might see it in a browser?</div>
+  <p>It's a generic message browsers use for "this native method/property was invoked with the wrong kind of receiver" — the same text can appear for entirely unrelated mistakes, like calling `Array.prototype.push.call({}, 1)` incorrectly on certain engines, or detaching a method from its object (`const f = element.getBoundingClientRect; f()`). Seeing this exact text elsewhere doesn't necessarily mean Trusted Types is involved — context matters, which is why this module cross-checked it against the OTHER, TT-specific error message from prior modules rather than relying on the string alone.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 23 goes one level deeper: what if the forgery attempt were more
+aggressive still — reassigning <code>Object.prototype</code> itself
+(prototype pollution), or attempting the forgery from a different realm
+(a separate iframe)? You'll see exactly which attacks the internal-slot
+mechanism defeats, and why.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../21_violation_reporting/tutorial.html">← Module 21: Trusted Types Violation Reporting</a></div>
+  <div class="next"><a href="../23_forged_object_defense/tutorial.html">Module 23: Forged-Object Defense →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 22 of 24 (9 of 11 in Track 2)</footer>
+</body>
+</html>
