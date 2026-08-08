@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: Rule (Trusted Types)</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · "Policy" Overloading</span>Concept: Rule (Trusted Types)</h1>
+
+<div class="analogy-box">
+<p>
+A <strong>rule</strong> is the plain JS function YOU write and hand to
+<code>createPolicy</code> — <code>createHTML</code>, <code>createScript</code>,
+or <code>createScriptURL</code>. It's the one piece of this whole vocabulary
+web that's ordinary, unprivileged JavaScript: no special syntax, no
+browser magic, just a function that takes a string and returns a string.
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>trustedTypes.createPolicy('my-policy', {
+  createHTML: (input) => input.toUpperCase(),  // ← THIS is a rule
+});</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Module 16 — a trivial rule (uppercase), proven to really execute via a counter</li>
+  <li>Module 17 — the <code>"default"</code> policy's rule, auto-invoked for legacy code</li>
+  <li>Module 24 — a real rule: <code>(input) => DOMPurify.sanitize(input)</code></li>
+</ul>
+
+<h2>What a rule is NOT</h2>
+<p>
+A rule is not itself checked for safety by the platform in any way — Module
+17's Brain Exercise made this explicit: a rule that just echoes its input
+unchanged is a completely valid, "working" rule that provides zero actual
+protection. The platform only guarantees a value passed THROUGH some rule;
+it has no opinion on whether that rule does anything useful.
+</p>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  A <strong>rule</strong> is the one piece OF a Trusted Types
+  <strong>policy</strong> that you author yourself. It has no CSP
+  equivalent at all — nothing in a CSP <strong>directive</strong> or
+  <strong>policy</strong> lets you supply custom transformation logic; CSP
+  only ever allows or blocks, it never transforms. See
+  <a href="concept_how_they_connect.html">the connection hub</a> for the
+  full comparison.
+</div>
+
+<p>
+<a class="tag-link" href="concept_csp_policy.html">→ Policy (CSP)</a>
+<a class="tag-link" href="concept_csp_directive.html">→ Directive (CSP)</a>
+<a class="tag-link" href="concept_trusted_types_policy.html">→ Trusted Types Policy</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 16</a></footer>
+</body>
+</html>

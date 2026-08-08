@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: CSP Policy</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #58a6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · "Policy" Overloading</span>Concept: CSP Policy</h1>
+
+<div class="analogy-box">
+<p>
+A CSP <strong>policy</strong> is the full text of one
+<code>Content-Security-Policy</code> header's value — the entire rulebook
+for one page, cover to cover. It's not one rule; it's the whole document
+that contains all of them.
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-abc123'; frame-ancestors 'none'
+                          └──────────────────────────── the POLICY ────────────────────────────┘</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Every Track 1 module — the entire header value passed to <code>res.writeHead</code></li>
+  <li>Module 8 — proved TWO of these can be active on one page at once, combined by intersection</li>
+  <li>Module 2 — the parser this course built takes a policy STRING and turns it into a directive→source-list object</li>
+</ul>
+
+<h2>What it's built from</h2>
+<p>
+A policy is made of one or more <strong>directives</strong> (see that
+term's own page) separated by semicolons. It has no rules of its own
+directly — every actual restriction lives inside a directive.
+</p>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  A CSP <strong>policy</strong> contains <strong>directives</strong>. It
+  shares its name — and nothing else — with a completely different concept,
+  <strong>Trusted Types policy</strong>, introduced starting Module 16. See
+  <a href="concept_how_they_connect.html">the connection hub</a> for the
+  full picture and a table of exactly how people mix these two up.
+</div>
+
+<p>
+<a class="tag-link" href="concept_csp_directive.html">→ Directive (CSP)</a>
+<a class="tag-link" href="concept_trusted_types_policy.html">→ Trusted Types Policy</a>
+<a class="tag-link" href="concept_policy_rule.html">→ Rule (Trusted Types)</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 16</a></footer>
+</body>
+</html>

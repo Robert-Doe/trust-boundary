@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: Trusted Types Policy</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · "Policy" Overloading</span>Concept: Trusted Types Policy</h1>
+
+<div class="analogy-box">
+<p>
+A Trusted Types <strong>policy</strong> is a JS OBJECT — the return value
+of <code>trustedTypes.createPolicy(name, rules)</code> — not a string, not
+an HTTP header, and not part of the CSP header value at all. It's callable
+code with a name attached, living in your page's running JavaScript, that
+produces branded values when you call its methods.
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>const policy = trustedTypes.createPolicy('my-policy', {
+  createHTML: (input) => sanitize(input),
+});
+typeof policy;              // "object"
+typeof policy.createHTML;   // "function"</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Module 16 — introduced; proved it returns an object exposing all three creator methods</li>
+  <li>Module 17 — the special name <code>"default"</code>, auto-invoked for legacy code</li>
+  <li>Module 20 — WHICH names are allowed to become a Trusted Types policy at all</li>
+  <li>Module 24 — a real policy wrapping DOMPurify</li>
+</ul>
+
+<div class="callout warn">
+  <span class="label">The confusion this term causes</span>
+  It shares the single word "policy" with the CSP <strong>policy</strong>
+  concept (the whole header value) — but a Trusted Types policy is a
+  runtime JS object your code creates and calls methods on; a CSP policy is
+  a string the SERVER sends as a header, parsed and enforced by the
+  browser before your page's own script ever runs. They exist at
+  completely different layers.
+</div>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  A Trusted Types <strong>policy</strong> is created BY a CSP
+  <strong>directive</strong> permitting it to exist
+  (<code>require-trusted-types-for</code> + <code>trusted-types</code>),
+  but is itself a completely separate JS-level object, not a CSP construct.
+  It's built from <strong>rules</strong> (see that term). See
+  <a href="concept_how_they_connect.html">the connection hub</a>.
+</div>
+
+<p>
+<a class="tag-link" href="concept_csp_policy.html">→ Policy (CSP)</a>
+<a class="tag-link" href="concept_csp_directive.html">→ Directive (CSP)</a>
+<a class="tag-link" href="concept_policy_rule.html">→ Rule (Trusted Types)</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 16</a></footer>
+</body>
+</html>

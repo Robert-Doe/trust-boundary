@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 16 — Policy Factory</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 16</span>Policy Factory</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../15_require_trusted_types_directive/tutorial.html">Module 15: require-trusted-types-for</a>
+  <a class="tag-link" href="../../prerequisites/04_js_prototype_chain.html">js-prototype-chain</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Module 15 built a checkpoint with an empty allowlist and no notary in the
+building at all. This module hires exactly one notary, gives them a named
+stamp, and defines precisely what they're allowed to certify. Anyone can
+still hand the notary a raw, unverified document — the notary's whole job
+is to look at it, apply their specific rule (maybe reformat it, maybe
+reject it, maybe pass it through), and hand back a <em>stamped</em>
+version. The checkpoint doesn't trust raw documents; it trusts the stamp,
+and the stamp only exists because the notary's rule function actually ran.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li><code>trustedTypes.createPolicy('module16-demo', { createHTML: rule })</code> is called, where <code>rule</code> is a plain JS function that uppercases its input.</li>
+  <li>It returns a <code>TrustedTypePolicy</code> object — an object, not a string, not a function itself.</li>
+  <li>That object exposes <code>createHTML</code>, <code>createScript</code>, AND <code>createScriptURL</code> as callable methods — <em>all three</em>, even though only one rule was actually provided.</li>
+  <li>Calling <code>policy.createHTML('hello world')</code> invokes our rule function for real, and returns a <code>TrustedHTML</code> object wrapping the transformed result, <code>"HELLO WORLD"</code>.</li>
+  <li>That object — not a string — is accepted by <code>innerHTML</code>, and the transformed text is what actually renders.</li>
+  <li>A raw string, assigned elsewhere on the same page, is rejected exactly as in Module 15 — having a policy defined doesn't loosen the requirement for code that doesn't use it.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">'hello world' (plain string)</text>
+    <rect x="10" y="35" width="200" height="40" rx="6" fill="#161b22" stroke="#db61a2"/>
+    <text x="20" y="60">policy.createHTML(input)</text>
+    <text x="230" y="60">rule runs: input.toUpperCase()</text>
+
+    <text x="10" y="110" fill="#fff">→ TrustedHTML { "HELLO WORLD" }</text>
+    <rect x="10" y="125" width="330" height="40" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="150">instanceof TrustedHTML: true</text>
+    <text x="360" y="150">instanceof String: false</text>
+
+    <text x="10" y="195" fill="#3fb950">innerHTML accepts it → renders "HELLO WORLD"</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The policy, with an observable rule — <a href="server.js">server.js</a>:</p>
+<pre><code>const policy = trustedTypes.createPolicy('module16-demo', {
+  createHTML: (input) => {
+    ruleInvocationCount++;
+    return input.toUpperCase(); // trivial, OBSERVABLE transform
+  },
+});</code></pre>
+<p>The finding we only caught by calling, not just checking <code>typeof</code>:</p>
+<pre><code>typeof policy.createScript  // "function" — even though no rule was given!
+policy.createScript('1+1'); // THROWS:
+// "Policy module16-demo's TrustedTypePolicyOptions did not specify a 'createScript' member."</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Intercept LEGACY code that still assigns raw strings — every call site has to explicitly opt into a policy (Module 17 changes this)</li>
+      <li>Restrict WHICH policy names are allowed to be created (Module 20)</li>
+      <li>Build a policy that actually removes dangerous content — ours just uppercases, a stand-in for a real transform</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Create a named, callable policy whose rule function genuinely executes on every call</li>
+      <li>Produce values a guarded sink will accept, verified by both type checks AND real rendered output</li>
+      <li>Confirm raw strings remain rejected everywhere a policy wasn't explicitly used — no accidental global loosening</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/16_policy_factory/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7300</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — typeof policy.createScript: function
+          → but CALLING it: THREW: TypeError: ... did not specify a
+          'createScript' member.
+Proof B — ruleInvocationCount: 1
+          trustedValue instanceof TrustedHTML: true
+          String(trustedValue): "HELLO WORLD"
+Proof C — innerHTML assignment SUCCEEDED — rendered: HELLO WORLD
+Proof D — THREW: TypeError: ... This document requires 'TrustedHTML' assignment.</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If you edit <code>server.js</code> and don't see your change reflected,
+  restart <code>node server.js</code> — this bit us while building this
+  exact module (see Module 7's DECISIONS.md for the same root cause: Node
+  doesn't hot-reload edited source files).
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Why does a <code>TrustedTypePolicy</code> object expose ALL THREE creator
+methods (<code>createHTML</code>, <code>createScript</code>,
+<code>createScriptURL</code>) as real, callable functions, instead of just
+omitting the ones you didn't provide a rule for — which would have made
+<code>typeof policy.createScript</code> report <code>"undefined"</code>
+and let you check for the omission with a simple <code>if</code>?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Consider what code calling `policy.createScript(...)` actually needs to
+happen if the policy author never anticipated that call: a clear,
+immediate, unambiguous failure — not a silent `undefined` that then causes
+a confusing "X is not a function" error somewhere else, or worse, gets
+accidentally treated as if it succeeded. By always exposing the method and
+having it throw a SPECIFIC, NAMED error ("Policy X did not specify a
+createScript member") when the rule doesn't exist, the platform guarantees
+every misuse fails loudly, with a message that names the exact policy and
+the exact missing capability — much easier to debug than a generic
+`undefined is not a function`, and impossible to accidentally treat as a
+successful, silent no-op.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does `String(trustedValue)` mean `TrustedHTML` secretly IS a string underneath?</div>
+  <p>No — and this matters for Module 22. `String(x)` calls `x`'s `toString()` method and returns a genuine, ordinary string built from whatever that returns; it doesn't reveal or unwrap some internal string `TrustedHTML` is "really" made of. We verified `trustedValue instanceof String` is `false` — a real, different type, that happens to have a `toString()` method, same as countless other JS objects.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could two different policies both be named `'module16-demo'`?</div>
+  <p>Not tested in this module (kept out of scope on purpose) — but per spec, calling `createPolicy` twice with the same name throws, UNLESS the `trusted-types` CSP directive explicitly allows duplicates via `'allow-duplicates'`. Module 20 covers policy-name restrictions in depth.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is `ruleInvocationCount` a Trusted-Types-specific mechanism?</div>
+  <p>No — it's just an ordinary JS closure variable we added ourselves, incremented inside our own rule function. Trusted Types doesn't provide any built-in "was my rule called" introspection; we built this purely to make Proof B's claim verifiable rather than assumed.</p>
+</div>
+
+<div class="callout">
+  <span class="label">Before you move on</span>
+  This module introduces the SECOND meaning of "policy" in this course —
+  a real, easy-to-conflate overload with "CSP policy" from Track 1. If
+  that's already tripping you up, the vocabulary web disambiguates all
+  four related terms:
+  <a href="concept_how_they_connect.html">Policy vs. Directive vs. Trusted
+  Types Policy vs. Rule →</a>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 17 introduces the one policy NAME with special meaning:
+<code>"default"</code>. You'll see it intercept legacy code that still
+assigns raw strings directly — without that code ever calling
+<code>createPolicy</code> or knowing Trusted Types exists at all.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../15_require_trusted_types_directive/tutorial.html">← Module 15: require-trusted-types-for</a></div>
+  <div class="next"><a href="../17_default_policy/tutorial.html">Module 17: The "default" Policy →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 16 of 24 (3 of 11 in Track 2)</footer>
+</body>
+</html>

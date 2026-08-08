@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Concept: Directive (CSP)</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #58a6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Vocabulary Web · "Policy" Overloading</span>Concept: Directive (CSP)</h1>
+
+<div class="analogy-box">
+<p>
+A <strong>directive</strong> is ONE named rule inside a policy — one line
+item in the rulebook, not the rulebook itself. <code>script-src 'self'</code>
+is a directive. <code>require-trusted-types-for 'script'</code> is a
+directive. A policy is nothing but a list of these, joined by semicolons.
+</p>
+</div>
+
+<h2>What it looks like</h2>
+<pre><code>script-src 'self' 'nonce-abc123'
+└───┬────┘ └────────┬────────┘
+  name         source list (the directive's VALUE)</code></pre>
+
+<h2>Where you've seen it</h2>
+<ul>
+  <li>Modules 3, 5, 6, 7 — <code>script-src</code>, governing script execution</li>
+  <li>Module 12 — <code>frame-ancestors</code>, a structural directive with no source list in the usual sense</li>
+  <li>Module 15 — <code>require-trusted-types-for</code>, the directive that turns on Trusted Types enforcement</li>
+  <li>Module 20 — <code>trusted-types</code>, a DIFFERENT directive (confusingly similar name!) that allowlists policy NAMES</li>
+</ul>
+
+<div class="callout warn">
+  <span class="label">The sharpest confusion this term causes</span>
+  <code>require-trusted-types-for</code> and <code>trusted-types</code> are
+  TWO DIFFERENT CSP directives with almost-identical names and completely
+  different jobs — one turns on enforcement, the other restricts policy
+  names. See the sibling vocabulary web in
+  <a href="../20_policy_name_allowlist/concept_how_they_connect.html">Module
+  20's folder</a> for that specific pair, disambiguated in full.
+</div>
+
+<div class="callout ok">
+  <span class="label">How this connects to the other terms</span>
+  A <strong>directive</strong> lives inside a CSP <strong>policy</strong>.
+  It is NOT the same thing as a Trusted Types <strong>rule</strong>
+  (the <code>createHTML</code>/<code>createScript</code> functions) —
+  different layer entirely, even though both could loosely be called "a
+  rule." See <a href="concept_how_they_connect.html">the connection hub</a>.
+</div>
+
+<p>
+<a class="tag-link" href="concept_csp_policy.html">→ Policy (CSP)</a>
+<a class="tag-link" href="concept_trusted_types_policy.html">→ Trusted Types Policy</a>
+<a class="tag-link" href="concept_policy_rule.html">→ Rule (Trusted Types)</a>
+<a class="tag-link" href="concept_how_they_connect.html">→ How They Connect</a>
+</p>
+
+<footer class="course-footer">Vocabulary Web · <a href="tutorial.html">Back to Module 16</a></footer>
+</body>
+</html>
