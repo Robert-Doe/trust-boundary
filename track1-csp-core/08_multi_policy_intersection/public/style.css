@@ -1,0 +1,8 @@
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 700px; margin: 3rem auto; padding: 0 1rem; }
+h1 { color: #fff; }
+.proof { border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin: 1rem 0; background: #161b22; }
+.proof b { color: #f0883e; }
+.result { font-family: monospace; }
+.result.blocked { color: #f85149; }
+.result.allowed { color: #3fb950; }
+#violation-log { font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; background: #010409; border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; max-height: 260px; overflow-y: auto; }

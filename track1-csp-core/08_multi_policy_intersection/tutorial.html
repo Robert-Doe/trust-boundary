@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 8 — Multiple-Policy Intersection</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #f0883e; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 8</span>Multiple-Policy Intersection</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../02_csp_header_parser/tutorial.html">Module 2: CSP Header Parser</a>
+  <a class="tag-link" href="../03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Picture two separate security checkpoints on the road into a facility, run
+by two different agencies that never talk to each other. Checkpoint 1 has a
+guest list and waves through anyone on it. Checkpoint 2 has its own,
+shorter guest list. To actually reach the building, your name has to be on
+<em>both</em> lists — being on Checkpoint 1's list only gets you past
+Checkpoint 1. Neither checkpoint's list "helps" the other one; they don't
+merge into one combined list. You're stopped the moment you fail
+<em>either</em> checkpoint, regardless of how generously the other one
+would have treated you.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends two separate <code>Content-Security-Policy</code> header lines on one response — not one policy with two clauses, two genuinely independent policies.</li>
+  <li>Browser parses both, keeps them as two separate active policies (not merged into one internal representation).</li>
+  <li>For each load attempt, the browser checks it against Policy 1 in full, and separately against Policy 2 in full.</li>
+  <li>The load is only allowed if it passes <em>both</em> checks. A single failing policy blocks it, no matter how permissive the other policy is.</li>
+  <li>Each violation event reports exactly which policy string caused that specific block, via <code>event.originalPolicy</code>.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">Policy 1: script-src 'self' 'unsafe-inline'; img-src http://localhost:6300</text>
+    <text x="10" y="40" fill="#fff">Policy 2: script-src 'self'</text>
+
+    <rect x="10" y="60" width="200" height="70" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="80">Proof A: inline script</text>
+    <text x="20" y="98" fill="#3fb950" font-size="10">Policy 1: would ALLOW</text>
+    <text x="20" y="112" fill="#f85149" font-size="10">Policy 2: BLOCKS</text>
+    <text x="20" y="126" fill="#f85149">→ overall BLOCKED</text>
+
+    <rect x="240" y="60" width="200" height="70" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="250" y="80">Proof B: same-origin</text>
+    <text x="250" y="98" fill="#3fb950" font-size="10">Policy 1: ALLOWS</text>
+    <text x="250" y="112" fill="#3fb950" font-size="10">Policy 2: ALLOWS</text>
+    <text x="250" y="126" fill="#3fb950">→ overall ALLOWED</text>
+
+    <rect x="470" y="60" width="200" height="70" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="480" y="80">Proof C: cross-origin img</text>
+    <text x="480" y="98" fill="#3fb950" font-size="10">Policy 1: ALLOWS (explicit)</text>
+    <text x="480" y="112" fill="#3fb950" font-size="10">Policy 2: doesn't restrict img</text>
+    <text x="480" y="126" fill="#3fb950">→ overall ALLOWED</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Sending two real header lines — <a href="server.js">server.js</a>:</p>
+<pre><code>res.setHeader('Content-Security-Policy', [POLICY_1, POLICY_2]);</code></pre>
+<p>Capturing which policy did the blocking, not just that something blocked — <a href="public/violation-listener.js">public/violation-listener.js</a>:</p>
+<pre><code>window.__cspViolations.push({
+  blockedURI: e.blockedURI,
+  violatedDirective: e.violatedDirective,
+  originalPolicy: e.originalPolicy, // the exact policy string that blocked THIS load
+});</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Use a second, looser policy to "relax" a strict one — combination is AND, never OR</li>
+      <li>Combine a header policy with a `&lt;meta&gt;`-tag policy the exact same way — Module 9 covers real differences there</li>
+      <li>Assume an unset directive means "unrestricted" in general — it depends on that specific policy's own `default-src`</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Layer a stricter policy on top of an existing one without touching the original (useful for defense-in-depth added by, say, a CDN or reverse proxy)</li>
+      <li>Identify exactly which policy blocked a given load using `event.originalPolicy`</li>
+      <li>Reason correctly about "missing directive" as meaning "this policy doesn't constrain it," not "this policy forbids it"</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/08_multi_policy_intersection/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:6200</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — (has not run yet)
+Proof B — ran — same-origin external script executed normally
+Proof C — loaded — image displayed
+
+Live CSP violation log:
+#1 blockedURI=inline  violatedDirective=script-src-elem
+     causedByPolicy="script-src 'self'"</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If you only see ONE <code>Content-Security-Policy</code> header in your
+  network tab instead of two, check that you used
+  <code>res.setHeader(name, [a, b])</code> — passing a single comma-joined
+  string instead produces one malformed policy, not two valid ones, and
+  every proof's behavior will look different from what's documented here.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A CDN sits in front of your app server and injects its own baseline
+<code>Content-Security-Policy</code> header for every response, on top of
+whatever your app already sends. Your app team wants to loosen their own
+policy temporarily to debug something in production. Will adding
+<code>'unsafe-inline'</code> to your app's policy actually let inline
+scripts run, given the CDN's header is still attached too?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Only if the CDN's policy also allows it — which, per this module, is
+unlikely to be what a security-conscious CDN's baseline policy does. Since
+policies combine by AND, loosening YOUR policy can only ever expand what
+your policy alone would allow; it can never override or loosen a
+restriction imposed by the other active policy. This is a genuinely common
+production gotcha: teams add `'unsafe-inline'` to debug something, see no
+change, and conclude their header update didn't deploy — when actually it
+deployed fine, but a second, stricter policy from infrastructure they don't
+control is still in the mix.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Is this the same rule as Module 2's "duplicate directive: first wins"?</div>
+  <p>No — genuinely different mechanisms, easy to conflate. Module 2's rule is about TWO DIRECTIVES WITH THE SAME NAME inside ONE policy string (`script-src a; script-src b` — second ignored). This module is about TWO ENTIRELY SEPARATE POLICIES, each fully parsed and enforced on its own, then combined by requiring both to pass. A duplicate directive within one policy never reaches the "combine multiple policies" step at all — it's resolved before that.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why would a real site ever send two policies instead of just writing one stricter policy?</div>
+  <p>The most common real reason: they don't control both. A CDN, reverse proxy, or platform layer might add its own baseline security header independent of the application's own CSP — the app team can't necessarily edit or even see the infrastructure layer's policy, and vice versa. Intersection is what makes "layered, independently-authored policies" a coherent security model instead of a race condition.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does the order of the two header lines matter — would swapping Policy 1 and Policy 2 change any result?</div>
+  <p>No — intersection (logical AND) is commutative. We didn't test this by relying on documentation alone being trustworthy, but it follows directly from "a load must pass every active policy": there's no step in that description where order could matter, unlike Module 2's duplicate-directive rule, where order (first vs. second) is the entire rule.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 9 looks at a different way to deliver a policy entirely —
+<code>&lt;meta http-equiv="Content-Security-Policy"&gt;</code> — and what
+changes (and what doesn't) versus the HTTP header you've used in every
+module so far.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../07_strict_dynamic/tutorial.html">← Module 7: strict-dynamic Propagation</a></div>
+  <div class="next"><a href="../09_meta_vs_header/tutorial.html">Module 9: Meta Tag vs. Header →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 8 of 13</footer>
+</body>
+</html>

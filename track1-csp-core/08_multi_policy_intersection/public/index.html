@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 8 — Multiple-Policy Intersection</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js"></script>
+</head>
+<body>
+  <h1>Module 8 — Multiple-Policy Intersection</h1>
+  <p>This response carries TWO separate <code>Content-Security-Policy</code> header lines:</p>
+  <ul>
+    <li><code>Policy 1: script-src 'self' 'unsafe-inline'; img-src http://localhost:6300</code></li>
+    <li><code>Policy 2: script-src 'self'</code></li>
+  </ul>
+
+  <div class="proof">
+    <b>Proof A — inline script (allowed by Policy 1's 'unsafe-inline', but NOT Policy 2) — predict: BLOCKED, must satisfy BOTH</b>
+    <p id="inline-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — same-origin external script (allowed by BOTH policies) — predict: ALLOWED</b>
+    <p id="same-origin-proof" class="result">(waiting for /wiring.js ...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — cross-origin image from port 6300 (Policy 1 explicitly allows it; Policy 2 says nothing about images at all) — predict: ALLOWED, since Policy 2 doesn't restrict images</b><br>
+    <img id="remote-img" src="http://localhost:6300/pixel.png" width="64" height="64">
+    <p id="img-proof" class="result">(waiting...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof A: inline script. -->
+  <script>
+    document.getElementById('inline-proof').textContent = 'ran (should NOT happen — Policy 2 has no unsafe-inline)';
+    document.getElementById('inline-proof').className = 'result allowed';
+  </script>
+
+  <script src="/wiring.js"></script>
+</body>
+</html>
