@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 3 — Directive Enforcement</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js"></script>
+</head>
+<body>
+  <h1>Module 3 — Directive Enforcement</h1>
+  <p>This page is served with a real header:
+     <code>Content-Security-Policy: default-src 'self'; script-src 'self'</code>.
+     Same four proofs as Module 1, plus one new one (E) that should still work.</p>
+
+  <div class="proof">
+    <b>Proof A — inline script (expect: BLOCKED)</b>
+    <p id="inline-proof" class="result">(inline script has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — remote script from a different origin, port 5400 (expect: BLOCKED)</b>
+    <p id="remote-script-proof" class="result">(waiting for http://localhost:5400/attacker.js ...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — image from a different origin, port 5400 (expect: BLOCKED)</b><br>
+    <img id="remote-img" class="pixel-box" src="http://localhost:5400/pixel.png" width="64" height="64">
+    <p id="img-proof" class="result">(waiting...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof D — <code>eval()</code>, wired from a same-origin external script (expect: BLOCKED, no 'unsafe-eval')</b><br>
+    <button id="eval-btn">Run eval('1 + 1')</button>
+    <p id="eval-proof" class="result">(not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof E — same-origin external script (expect: ALLOWED — 'self' is in the policy)</b>
+    <p id="same-origin-proof" class="result">(waiting for /same-origin-proof.js ...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b> (captured via the <code>securitypolicyviolation</code> event — full Reporting API is Module 10)
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof A: inline script. Under this policy, this entire block should
+       never execute — if you see the "(inline script has not run yet)"
+       text still there at the end, that IS the proof. -->
+  <script>
+    document.getElementById('inline-proof').textContent = 'ran (should NOT happen under this policy)';
+    document.getElementById('inline-proof').className = 'result allowed';
+  </script>
+
+  <!-- Proof B: cross-origin script. -->
+  <script src="http://localhost:5400/attacker.js"></script>
+
+  <!-- Proof D + E wiring and the violation log are same-origin external
+       files, allowed by 'self'. -->
+  <script src="/wiring.js"></script>
+  <script src="/same-origin-proof.js"></script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 3 — Directive Enforcement</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 3</span>Directive Enforcement</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/03_csp_vocabulary.html#directive-inheritance">directive-inheritance</a>
+  <a class="tag-link" href="../02_csp_header_parser/tutorial.html">Module 2: CSP Header Parser</a>
+  <a class="tag-link" href="../01_no_policy_baseline/tutorial.html">Module 1: No-Policy Baseline</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Back to Module 1's apartment building. This module is the day the front
+desk finally opens. A sign goes up: <em>"Only residents (badge = 'self')
+may enter units. No outside deliveries accepted at the door."</em> The
+building's rooms, hallways, and furniture haven't changed at all — what
+changed is that now someone is checking badges before letting anyone
+through, and turning away everyone who doesn't have one.
+</p>
+<p>
+Critically: the front desk doesn't know or care <em>why</em> a resident
+wants to enter their own unit — it only checks the badge. That's why Proof E
+(a same-origin script) sails through unchanged while Proofs A–D, all
+attempts to use unbadged or self-authored-on-the-spot entry, get turned
+away.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends <code>Content-Security-Policy: default-src 'self'; script-src 'self'</code> as a real response header alongside the HTML body.</li>
+  <li><code>violation-listener.js</code> loads first (before anything else) and starts buffering every <code>securitypolicyviolation</code> event.</li>
+  <li>Browser parses the body. Inline <code>&lt;script&gt;</code> (Proof A): blocked before it runs — no <code>'unsafe-inline'</code>.</li>
+  <li><code>&lt;script src="http://localhost:5400/attacker.js"&gt;</code> (Proof B): blocked before the fetch even completes — <code>5400</code> isn't <code>'self'</code>.</li>
+  <li><code>&lt;img src="http://localhost:5400/pixel.png"&gt;</code> (Proof C): blocked under the <code>img-src</code> fallback from <code>default-src</code>.</li>
+  <li><code>wiring.js</code> (same-origin, allowed) loads and runs. It drains the buffered violations into the on-page log, then calls <code>eval('1 + 1')</code> automatically (Proof D): throws <code>EvalError</code> — no <code>'unsafe-eval'</code>.</li>
+  <li><code>same-origin-proof.js</code> (Proof E) loads and runs normally — <code>'self'</code> covers it.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff" font-size="13">Content-Security-Policy: default-src 'self'; script-src 'self'</text>
+
+    <rect x="10" y="40" width="200" height="34" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="61">A: inline script</text>
+    <text x="560" y="61" fill="#f85149">BLOCKED</text>
+
+    <rect x="10" y="80" width="200" height="34" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="101">B: cross-origin script</text>
+    <text x="560" y="101" fill="#f85149">BLOCKED</text>
+
+    <rect x="10" y="120" width="200" height="34" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="141">C: cross-origin image</text>
+    <text x="560" y="141" fill="#f85149">BLOCKED (img-src fallback)</text>
+
+    <rect x="10" y="160" width="200" height="34" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="181">D: eval('1 + 1')</text>
+    <text x="560" y="181" fill="#f85149">BLOCKED (EvalError)</text>
+
+    <rect x="10" y="200" width="200" height="34" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="221">E: same-origin script</text>
+    <text x="560" y="221" fill="#3fb950">ALLOWED</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The header, sent for real — <a href="server.js">server.js</a>:</p>
+<pre><code>const POLICY = "default-src 'self'; script-src 'self'";
+// ...
+const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+if (sendCSP) headers['Content-Security-Policy'] = POLICY;
+res.writeHead(200, headers);</code></pre>
+<p>The listener that has to load first — <a href="public/violation-listener.js">public/violation-listener.js</a>:</p>
+<pre><code>window.__cspViolations = [];
+document.addEventListener('securitypolicyviolation', (e) => {
+  window.__cspViolations.push({
+    blockedURI: e.blockedURI,
+    violatedDirective: e.violatedDirective,
+    effectiveDirective: e.effectiveDirective,
+  });
+});</code></pre>
+<p>The eval probe that runs unconditionally, not just on click — <a href="public/wiring.js">public/wiring.js</a>:</p>
+<pre><code>function runEvalProbe() {
+  const el = document.getElementById('eval-proof');
+  try {
+    const result = eval('1 + 1');
+    el.textContent = 'eval result: ' + result + ' (should NOT happen under this policy)';
+  } catch (e) {
+    el.textContent = 'BLOCKED: ' + e.name + ': ' + e.message;
+  }
+}
+document.getElementById('eval-btn').addEventListener('click', runEvalProbe);
+runEvalProbe(); // auto-run once on load — this is the run the tutorial documents</code></pre>
+<p>Full (a)/(b)/(c) breakdown, including two things we only discovered by actually running this module, in <a href="DECISIONS.md">DECISIONS.md</a>.</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Allow ONE specific inline script while blocking all others (Module 5's job)</li>
+      <li>Observe violations without also blocking them (Module 4's job)</li>
+      <li>Combine two policies from two sources (Module 8's job)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Send a real policy and watch a real browser enforce all-or-nothing per directive</li>
+      <li>Read the browser's own stated reason for each block, verbatim</li>
+      <li>Distinguish "blocked" from "never even attempted" using the violation event's fields</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/03_directive_enforcement/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:5300</code>. Expected page state (this is the real captured result):</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — (inline script has not run yet)
+Proof B — (waiting for http://localhost:5400/attacker.js ...)
+Proof C — (waiting...)
+Proof D — BLOCKED: EvalError: Evaluating a string as JavaScript violates the
+          following Content Security Policy directive because 'unsafe-eval'
+          is not an allowed source of script: script-src 'self'".
+Proof E — ran — this same-origin external script executed normally
+
+Live CSP violation log:
+#1 blockedURI=http://localhost:5400/pixel.png   violatedDirective=img-src
+#2 blockedURI=inline                            violatedDirective=script-src-elem
+#3 blockedURI=http://localhost:5400/attacker.js violatedDirective=script-src-elem
+#4 blockedURI=eval                              violatedDirective=script-src</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If the violation log stays "(none yet)" even though Proofs A–C are
+  correctly blocked, check that <code>violation-listener.js</code> is really
+  the first <code>&lt;script&gt;</code> tag in <code>&lt;head&gt;</code> — if
+  anything moves it after body content, it will miss early violations, which
+  is the exact bug we hit and fixed while building this module (see
+  DECISIONS.md). If you're testing this page's behavior from a devtools
+  console instead of clicking/loading it normally, be aware that
+  console-typed <code>eval(...)</code> is <strong>exempt</strong> from this
+  page's CSP — that's expected, not a bug in the demo (see the Brain
+  Exercise below).
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+We built this module's Proof D to run automatically on page load instead of
+only from a button click. Why wasn't "just click the button and check the
+result" good enough — what specifically could go wrong with only testing it
+that way?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+We actually hit this for real: testing via this course's own browser
+automation, calling <code>element.click()</code> through Chrome DevTools
+Protocol's <code>Runtime.evaluate</code>, made <code>eval('1 + 1')</code>
+return <code>2</code> — CSP did not block it. That's because DevTools/CDP-
+injected script execution is treated by Chromium as trusted operator input,
+exempt from the page's own <code>script-src</code> restriction on
+<code>eval</code>, and that exemption applies to anything called
+synchronously from within that injected call, including our click handler.
+A human physically clicking the button in a real browser window would NOT
+get this exemption — only automation tooling built on the same protocol
+path does. Since we needed a result we could trust and reproduce
+consistently regardless of how the page is being driven, we made the probe
+run as part of the page's own normal load sequence — genuine page script,
+no external trigger, no exemption possible.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: If `default-src 'self'` already covers `img-src` by fallback, why did we also write `script-src 'self'` explicitly, when it's the same value?</div>
+  <p>To exercise the override rule from the prerequisites page on purpose: an explicit <code>script-src</code> fully replaces the fallback for scripts specifically, even when it happens to say the same thing. Writing it out makes that override visible in the header text itself, instead of leaving a reader to wonder whether scripts are "really" governed by <code>default-src</code> or not.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: The image proof (C) never got wired up to show "FAILED to load" — is that a bug?</div>
+  <p>It's the same load/attach-order issue documented for the violation log: the image starts loading (and failing) before <code>wiring.js</code>'s error handler ever attaches. We chose not to "fix" this one further, because the violation log entry (<code>#1 blockedURI=http://localhost:5400/pixel.png</code>) already proves the block — it's a good live example of exactly the ordering gotcha this module's DECISIONS.md discusses, left visible on purpose.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why does the violation event call the image block's directive `img-src` but the script blocks `script-src-elem`, not just `script-src`?</div>
+  <p><code>effectiveDirective</code> reports the most specific directive the browser actually checked against — `script-src-elem` governs `&lt;script&gt;` elements specifically (there's a sibling `script-src-attr` for `on*=""` attributes), while our policy only declared the broader `script-src`, which both of those fall back to. `img-src` has no such sub-directives, so it's reported plainly.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could an attacker who controls the *content* of `attacker.js` do anything, given it never even loads?</div>
+  <p>No — that's the point being proven. The browser refuses the fetch/execute before a single byte of that file's content matters. Under this policy, what `attacker.js` contains is irrelevant; only Module 5+ start caring about content-based allowlisting (hashes).</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 4 introduces the sibling header,
+<code>Content-Security-Policy-Report-Only</code>, which produces the exact
+same violation events you just saw — but blocks nothing. You'll run the
+identical policy in "watch only" mode and compare the two violation logs
+side by side, which is the actual workflow real teams use to test a new CSP
+policy before ever letting it block real traffic.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../02_csp_header_parser/tutorial.html">← Module 2: CSP Header Parser</a></div>
+  <div class="next"><a href="../04_report_only_mode/tutorial.html">Module 4: Report-Only Mode →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 3 of 13</footer>
+</body>
+</html>
