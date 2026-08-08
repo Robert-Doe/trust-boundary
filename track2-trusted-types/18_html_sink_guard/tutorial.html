@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 18 — HTML Sink Guard</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 18</span>HTML Sink Guard</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../16_policy_factory/tutorial.html">Module 16: Policy Factory</a>
+  <a class="tag-link" href="../14_dom_xss_sink_baseline/tutorial.html">Module 14: DOM-XSS Sink Baseline</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+A real passport check doesn't just glance at whether the photo looks like
+you and the paper is roughly the right shade of blue — it checks specific,
+hard-to-forge structural properties (the chip, the watermark, the
+issuing authority's own records). Something that merely LOOKS like a
+passport from across the room — same color, same rough shape, a printed
+photo — fails the moment anyone actually checks it properly. This module
+checks whether the Trusted Types "passport check" is the real, structural
+kind, or just a glance.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A real policy produces a real <code>TrustedHTML</code> value (no content transform this time — the test is about type, not content).</li>
+  <li>That same value is handed to three DIFFERENT HTML sinks: <code>innerHTML</code> (property), <code>outerHTML</code> (property), <code>insertAdjacentHTML</code> (method argument). All three accept it.</li>
+  <li>A plain object with a <code>toString()</code> method that returns realistic-looking HTML is handed directly to <code>innerHTML</code> — never touched any policy.</li>
+  <li>A genuine, boxed <code>String</code> object (via <code>new String(...)</code>) — a real, non-fake JS type, just not the RIGHT type — is handed to <code>innerHTML</code> the same way.</li>
+  <li>Both are rejected, with byte-for-byte identical error text to what a plain string would produce.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="150" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="12">real TrustedHTML value</text>
+    <text x="25" y="65">→ innerHTML: SUCCEEDED</text>
+    <text x="25" y="85">→ outerHTML: SUCCEEDED</text>
+    <text x="25" y="105">→ insertAdjacentHTML: SUCCEEDED</text>
+
+    <rect x="360" y="20" width="330" height="150" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="12">imitations</text>
+    <text x="375" y="65">{ toString: () =&gt; '...' }</text>
+    <text x="375" y="83" fill="#f85149">→ innerHTML: THREW</text>
+    <text x="375" y="110">new String('...')</text>
+    <text x="375" y="128" fill="#f85149">→ innerHTML: THREW (identical error)</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Three sinks, one value — <a href="server.js">server.js</a>:</p>
+<pre><code>document.getElementById('target-a').innerHTML = policy.createHTML('...');
+document.getElementById('target-b').outerHTML = policy.createHTML('...');
+document.getElementById('target-c').insertAdjacentHTML('beforeend', policy.createHTML('...'));
+// all three: SUCCEEDED</code></pre>
+<p>Two imitations, same rejection — <a href="server.js">server.js</a>:</p>
+<pre><code>const fake = { toString: () => '&lt;b&gt;fake&lt;/b&gt;' };
+el.innerHTML = fake; // THREW — looks right when stringified, still rejected
+
+const boxed = new String('&lt;b&gt;boxed&lt;/b&gt;');
+el.innerHTML = boxed; // THREW — a REAL String object, still not TrustedHTML</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Explain the EXACT mechanism the guard uses to distinguish a real TrustedHTML from an imitation — Module 22 opens that up</li>
+      <li>Protect script-type sinks (`eval`, `script.src`) — this module only covers the HTML family</li>
+      <li>Guard against a forgery attempt more sophisticated than simple duck-typing (Module 23)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Trust that the guard is enforced consistently across the whole HTML sink family, verified across three real sinks</li>
+      <li>Rule out "looks like the right string" as a way to satisfy a guarded sink</li>
+      <li>Rule out "is some kind of String-related object" as sufficient — it has to be the SPECIFIC TrustedHTML type</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/18_html_sink_guard/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7500</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A (innerHTML):          SUCCEEDED
+Proof B (outerHTML):          SUCCEEDED
+Proof C (insertAdjacentHTML): SUCCEEDED
+Proof D (duck-typed fake):    THREW: TypeError: ... This document requires
+                               'TrustedHTML' assignment.
+Proof E (boxed String):       THREW: TypeError: ... This document requires
+                               'TrustedHTML' assignment. (identical to D)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof C throws unexpectedly, double check the argument ORDER for
+  `insertAdjacentHTML(position, html)` — the guarded value is the SECOND
+  argument, not the first; a surprisingly common mistake when adapting
+  existing `insertAdjacentHTML` call sites to pass a `TrustedHTML` value.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Proof D's fake object and Proof E's boxed `String` both failed with the
+EXACT SAME error text as a plain string would. Given that, what's the
+simplest possible mental model for what the guard is actually checking —
+in one sentence, without using the word "content"?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+"Is this value's actual type `TrustedHTML`?" — full stop, nothing more
+sophisticated. Not "can this be turned into a string," not "does this
+object have a `toString` method," not "is this some flavor of String" —
+just a direct type identity check, which is why every non-`TrustedHTML`
+value, however convincingly it resembles the right string, fails
+identically. Module 22 goes one level deeper and shows you exactly HOW the
+browser performs that type check — which turns out to connect directly
+back to the JS prototype chain from the prerequisites layer.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why test a boxed `String` specifically — who would ever write `new String(...)` in real code?</div>
+  <p>Less common by hand, but a realistic byproduct of some libraries, some older code patterns, or values that pass through certain APIs that box primitives. The point isn't "this is a common bug" — it's "even a REAL, non-fake String-family object doesn't get any special treatment," which rules out an entire category of "maybe strings are special-cased somehow" assumptions in one test.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does `insertAdjacentHTML`'s guard behave differently because it's a method, not a property setter?</div>
+  <p>Not in terms of outcome — we verified it accepts a real `TrustedHTML` and (implicitly, following the same TypeError pattern as A/B) would reject a raw value the same way. The mechanism differs slightly under the hood (checking a specific argument position vs. a property assignment), but the guarantee is the same: no non-`TrustedHTML` value gets through, regardless of which sink shape delivers the check.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: If I wrote my OWN class with a `toString()` that returns safe HTML, could I make the guard treat it as trusted?</div>
+  <p>No — Proof D is exactly this scenario, generalized. No amount of clever `toString()` implementation changes the object's actual type, and the guard checks type, not stringified output. This is precisely why Trusted Types is a meaningfully different guarantee than "developer promises this is safe" — it's checked by the platform, not by convention.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 19 does the same work for the OTHER sink family — <code>eval</code>,
+<code>Function</code>, and script <code>src</code>/<code>text</code> —
+proving <code>TrustedScript</code>/<code>TrustedScriptURL</code> are guarded
+exactly as rigorously as <code>TrustedHTML</code> was here.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../17_default_policy/tutorial.html">← Module 17: The "default" Policy</a></div>
+  <div class="next"><a href="../19_script_sink_guard/tutorial.html">Module 19: Script Sink Guard →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 18 of 24 (5 of 11 in Track 2)</footer>
+</body>
+</html>
