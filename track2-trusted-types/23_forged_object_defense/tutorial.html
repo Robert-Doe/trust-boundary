@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 23 — Forged-Object Defense</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 4 · Module 23</span>Forged-Object Defense</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../22_brand_check_instanceof/tutorial.html">Module 22: Brand Check via instanceof</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Module 22 tested one lock-pick. A thorough locksmith doesn't stop at "the
+first pick I tried didn't work" — they try picks that approach the lock
+from every different angle: tampering with the whole building's master-key
+system (prototype pollution), swapping the sign on the locksmith's own shop
+(reassigning the global constructor), trying a completely different
+picking tool (a different JS API for the same end state), and finally just
+photographing a real key and printing a copy (stealing the content). This
+module runs all four, so that "prototype tricks can't forge Trusted Types"
+becomes a conclusion backed by four independent, real experiments —
+not one experiment plus an assumption that it generalizes.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li><strong>Attack A:</strong> <code>Object.prototype.polluted = 'yes'</code> — confirmed to genuinely affect every plain object. A plain <code>{}</code> is still rejected by the sink, with the SAME error a totally un-forged string gets — pollution never even gets it as far as passing <code>instanceof</code>.</li>
+  <li><strong>Attack B:</strong> <code>window.TrustedHTML</code> — the global identifier itself — is reassigned to a fake constructor. This succeeds with no error at all (it's just a variable). An instance of the fake constructor is still rejected. The ORIGINAL real value, created before the reassignment, is tried again AFTER it — and still works.</li>
+  <li><strong>Attack C:</strong> the same prototype-linking result as Module 22, achieved via <code>Object.setPrototypeOf</code> instead of <code>Object.create</code> — identical outcome (passes <code>instanceof</code>, fails the sink with "Illegal invocation").</li>
+  <li><strong>Attack D:</strong> a real value's string content is extracted via <code>String(real)</code> and handed to the sink as a plain string — rejected, same as any other plain string.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="10" width="330" height="55" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="30">A: Object.prototype polluted</text>
+    <text x="20" y="50" fill="#f85149">plain {} → REJECTED (same as unforged)</text>
+
+    <rect x="360" y="10" width="330" height="55" rx="6" fill="#161b22" stroke="#e3b341"/>
+    <text x="370" y="30">B: window.TrustedHTML reassigned</text>
+    <text x="370" y="50" fill="#3fb950">real value STILL works afterward</text>
+
+    <rect x="10" y="75" width="330" height="55" rx="6" fill="#161b22" stroke="#e3b341"/>
+    <text x="20" y="95">C: setPrototypeOf (not Object.create)</text>
+    <text x="20" y="115" fill="#f85149">instanceof true, sink REJECTED anyway</text>
+
+    <rect x="360" y="75" width="330" height="55" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="370" y="95">D: real value's content, stolen</text>
+    <text x="370" y="115" fill="#f85149">plain string → REJECTED</text>
+
+    <text x="10" y="160" fill="#fff" font-size="12">Common thread: none of these attacks touch the internal slot the</text>
+    <text x="10" y="180" fill="#fff" font-size="12">sink actually checks — every one operates purely at the JS/prototype layer.</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The most structurally interesting result — <a href="server.js">server.js</a>:</p>
+<pre><code>window.TrustedHTML = function FakeTrustedHTML(s) { this.value = s; };
+// ^ succeeds, NO error — it's an ordinary global reassignment
+
+const real = policy.createHTML('...'); // created BEFORE the reassignment
+document.createElement('div').innerHTML = real; // tried AFTER — still works!</code></pre>
+<p>Confirming pollution really worked, before checking whether it helps:</p>
+<pre><code>Object.prototype.polluted = 'yes';
+({}).polluted === 'yes'; // true — real, working pollution
+document.createElement('div').innerHTML = {}; // still THROWS anyway</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Test cross-realm forgery (an object created in a different iframe/window) — a different, spec-relevant scenario this module didn't cover</li>
+      <li>Point to the exact spec algorithm name for the internal-slot check — this course verified BEHAVIOR, not implementation source</li>
+      <li>Claim this defends against every conceivable attack — only the four specific, prototype-and-content-based ones tested here</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>State, with four independent pieces of real evidence, that prototype-chain manipulation cannot forge a Trusted Types value</li>
+      <li>Explain specifically WHY: the sink's check is bound to internal state, not to the mutable global identifier, not to the forging method, not to content alone</li>
+      <li>Answer "how does Trusted Types relate to prototypal inheritance" concretely: it deliberately does NOT rely on it for its security guarantee, precisely because prototypal inheritance is attacker-manipulable and internal slots aren't</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/23_forged_object_defense/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:8200</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Attack A — pollution took effect: true / plain {} → REJECTED (requires TrustedHTML)
+Attack B — reassignment succeeded, no error / fake instance → REJECTED /
+           original real value AFTER reassignment → ACCEPTED
+Attack C — instanceof: true / sink → REJECTED: Illegal invocation
+Attack D — stolen text reused as plain string → REJECTED (requires TrustedHTML)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Attack B's fake-constructor instance is ACCEPTED in your environment,
+  that would mean the sink IS consulting the mutable `window.TrustedHTML`
+  binding somehow — a genuinely significant, worth-reporting difference
+  from what this module verified, not something to quietly work around.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Across Modules 22 and 23, every single forgery attempt operated entirely
+within ordinary JavaScript — no browser bugs, no exploits, just standard,
+well-documented prototype and object APIs, used exactly as the language
+allows. Given that, in one sentence: why does Trusted Types work at all,
+if JavaScript itself puts no fundamental limits on what you can do to an
+object's prototype or a global variable's binding?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Because the guarantee doesn't live in JavaScript-observable state at all —
+it lives in an internal slot that the ECMAScript/WebIDL object model
+defines as existing, but deliberately does not expose to any JS-level
+introspection or mutation mechanism. Every attack in these two modules
+manipulated something JS code CAN see and touch (a prototype link, a
+global identifier, an object's own properties, a string's content) — and
+every one failed because none of those things IS the internal slot. The
+security boundary isn't "JavaScript can't do certain things" (it can do a
+lot) — it's "the specific state that matters was never made reachable
+FROM JavaScript in the first place," which is a fundamentally different
+and much stronger kind of protection than relying on convention or
+obscurity.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does this mean prototype pollution is never a real security concern in JavaScript generally?</div>
+  <p>No — prototype pollution is a real, well-documented class of vulnerability for OTHER kinds of code, particularly logic that trusts `instanceof` checks, uses objects as maps without `Object.create(null)`, or has conditional logic keyed on property presence (`if (obj.isAdmin)` where pollution could inject `isAdmin` onto every object). This module shows specifically that Trusted Types' OWN guarantee is immune to it — not that pollution is harmless everywhere.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: If `window.TrustedHTML` can be reassigned freely, is there any way to protect it, like `Object.freeze(window)`?</div>
+  <p>Not tested in this module, and beside the point this module makes: the sink's actual security guarantee doesn't depend on `window.TrustedHTML` being unmodifiable — Attack B's whole finding is that reassigning it changes nothing about the sink's behavior either way. Freezing it might be reasonable defensive hardening for OTHER reasons (preventing confusion, preventing other code from relying on a tampered reference), but it isn't what makes Trusted Types itself secure.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could an attacker with the ability to run arbitrary JS on the page do real damage some OTHER way, even with Trusted Types fully enforced?</div>
+  <p>Yes, almost certainly — Trusted Types protects specific DOM-XSS sinks; it says nothing about, for example, reading `document.cookie`, making arbitrary `fetch()` calls, or manipulating the DOM through APIs it doesn't guard. Trusted Types' scope is narrow and precise: it closes the sink-injection gap Module 14 identified, and this module confirms that specific guarantee resists prototype-based forgery. It was never meant to be a general "attacker JS can't do anything" boundary.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 24 is the capstone: a real DOMPurify-backed policy, tested against
+a real corpus of XSS payloads, end to end — the shippable pattern every
+prior module in this track has been building toward.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../22_brand_check_instanceof/tutorial.html">← Module 22: Brand Check via instanceof</a></div>
+  <div class="next"><a href="../24_sanitizer_capstone/tutorial.html">Module 24: Real-World Sanitizer Capstone →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 23 of 24 (10 of 11 in Track 2)</footer>
+</body>
+</html>
