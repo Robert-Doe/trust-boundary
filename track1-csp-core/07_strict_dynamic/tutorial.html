@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 7 — strict-dynamic Propagation</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #79c0ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 7</span>strict-dynamic Propagation</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../05_nonce_based_scripts/tutorial.html">Module 5: Nonce-Based Scripts</a>
+  <a class="tag-link" href="../../prerequisites/02_dom_sinks.html#innerhtml-sink">innerhtml-sink</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Imagine a nightclub where the doorman checks ID for exactly one person: the
+event's official DJ, who has a verified, pre-approved wristband (the nonce).
+Once the DJ is inside, though, anyone the DJ personally walks in through the
+door — their own crew, brought in one at a time, in person, by the DJ
+themselves — gets in too, no separate ID check. But the venue's own
+regular staff list (the guest list at the front — the "'self'" allowlist)?
+Irrelevant tonight. Once this special "DJ's-personal-escort-only" policy is
+in effect, the normal guest list stops being consulted for anyone at all —
+even the venue's own bartenders, if they try to walk in through the front
+door without being personally walked in by the DJ, get turned away.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends <code>script-src 'self' 'nonce-&lt;fresh&gt;' 'strict-dynamic'</code>.</li>
+  <li>A static <code>&lt;script src="/static-child.js"&gt;</code>, written directly in the HTML with no nonce, is blocked — <code>'strict-dynamic'</code> makes the browser stop consulting <code>'self'</code> entirely for parser-inserted scripts.</li>
+  <li>The nonced root <code>&lt;script&gt;</code> runs (Proof A) — same nonce-matching mechanism as Module 5.</li>
+  <li>That root script calls <code>document.createElement('script')</code>, sets its <code>.src</code>, and <code>appendChild</code>s it into the document — no nonce attribute anywhere on this new element.</li>
+  <li>That dynamically-inserted child runs anyway (Proof B) — because it was inserted, at runtime, by a script the browser already trusts, via a non-parser-inserted DOM API. Trust propagated.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff" font-size="13">script-src 'self' 'nonce-ZGXVUWjs...' 'strict-dynamic'</text>
+
+    <rect x="10" y="40" width="200" height="50" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="60">static-child.js</text>
+    <text x="20" y="78" fill="#f85149">no nonce → BLOCKED</text>
+    <text x="20" y="95" font-size="10" fill="#8b949e">('self' ignored)</text>
+
+    <rect x="240" y="40" width="200" height="50" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="250" y="60">root script</text>
+    <text x="250" y="78" fill="#3fb950">has nonce → ALLOWED</text>
+
+    <rect x="470" y="40" width="200" height="50" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="480" y="60">dynamic-child.js</text>
+    <text x="480" y="78" fill="#3fb950">no nonce → ALLOWED</text>
+    <text x="480" y="95" font-size="10" fill="#8b949e">(propagated)</text>
+
+    <line x1="340" y1="90" x2="500" y2="90" stroke="#3fb950" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="345" y="115" fill="#3fb950" font-size="11">createElement + appendChild</text>
+    <text x="345" y="130" fill="#3fb950" font-size="11">(non-parser-inserted → trust propagates)</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The propagation mechanism — <a href="public/index.html">public/index.html</a>:</p>
+<pre><code>const child = document.createElement('script');
+child.src = '/dynamic-child.js'; // NO nonce attribute set here at all
+document.body.appendChild(child);</code></pre>
+<p>The bug we hit and fixed — our OWN infrastructure scripts needed a nonce too, once <code>'strict-dynamic'</code> disabled <code>'self'</code> for everything parser-inserted:</p>
+<pre><code>&lt;script src="/violation-listener.js" nonce="{{NONCE}}"&gt;&lt;/script&gt;
+&lt;!-- ^ this nonce="{{NONCE}}" wasn't here in our first draft — see DECISIONS.md --&gt;</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Rely on `'self'` for ANY script once `'strict-dynamic'` is in the policy — it's fully disabled, not just deprioritized</li>
+      <li>Propagate trust through `innerHTML`-inserted markup</li>
+      <li>Combine two entirely separate policy sources and reason about which wins (Module 8)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Let a single trusted script load an arbitrary, runtime-determined set of further scripts (the real use case: bundlers/loaders that inject `<script>` tags dynamically)</li>
+      <li>Combine a nonce/hash root of trust with propagation, instead of re-nonceing every single dynamically-created script tag by hand</li>
+      <li>Recognize when a policy author's `'self'` is dead code, given `'strict-dynamic'` elsewhere in the same directive</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/07_strict_dynamic/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:5900</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — ran — root nonced script executed
+Proof B — ran — dynamically-inserted child executed, trust propagated from the root script
+Proof C — (has not run yet)
+
+Live CSP violation log:
+#1 blockedURI=http://localhost:5900/static-child.js  violatedDirective=script-src-elem</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If EVERY proof shows blocked, including A, check two things we ourselves
+  got wrong while building this: (1) does every one of your own infra
+  `&lt;script src&gt;` tags carry a nonce, since `'self'` won't save them
+  under `'strict-dynamic'`? (2) if you just edited `public/index.html`, did
+  you restart <code>node server.js</code>? The template is read once at
+  startup, not per-request — we lost real time to this exact gotcha while
+  building this module (see DECISIONS.md).
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Our own <code>violation-listener.js</code> and <code>wiring.js</code> got
+blocked by our own policy during development — real infrastructure, broken
+by our own security header. Was that a bug in <code>'strict-dynamic'</code>,
+or did it reveal something useful?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+It revealed something genuinely useful, precisely by being inconvenient.
+<code>'strict-dynamic'</code> doesn't distinguish "your trusted utility
+script" from "an attacker's injected script" by intent — it can't read
+intent. It only knows two things: was this specific element nonced/hashed,
+or was it inserted by something that was. A policy that quietly exempted
+"scripts that look like ours" would be a policy with a hole exactly shaped
+like an attacker's best injection point (write something that *looks* like
+infrastructure). The friction we hit is the security property working
+correctly against literally the first script it saw that didn't carry
+proof of trust — including ours. The fix (give real infrastructure a nonce
+too) is also the fix a production team has to make: treat every script,
+including your own bundler-injected ones, as needing an explicit trust
+credential, no implicit exceptions.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: If `'strict-dynamic'` ignores `'self'`, why does this course still write `'self'` into the policy at all?</div>
+  <p>To make Proof C possible — showing a real, common mistake (assuming `'self'` still applies) get caught by the browser, rather than only describing the rule in prose. A production policy that already understands this rule would typically omit `'self'` when `'strict-dynamic'` is present, since it does nothing there.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does trust propagate more than one level deep — can `dynamic-child.js` insert ANOTHER script the same way?</div>
+  <p>Yes — propagation isn't limited to one hop. Any script currently executing with the document's trust (whether it got that trust from a nonce, a hash, or from being propagated to it) can insert further non-parser scripts that inherit the same trust, indefinitely.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: What's the actual point of `'strict-dynamic'` if nonces already solve inline scripts?</div>
+  <p>Nonces solve a KNOWN, FIXED set of scripts you can enumerate at response-build time. `'strict-dynamic'` solves the case where your trusted entry-point script needs to load an unpredictable, runtime-determined set of further scripts — the realistic shape of most real-world bundler/loader output — without hand-nonceing every single one.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 8 changes the axis entirely: instead of one policy's internal rules,
+what happens when a page receives <em>two separate</em>
+<code>Content-Security-Policy</code> headers (or a header plus a
+<code>&lt;meta&gt;</code> policy) at once? You'll build and verify the
+combination rule for real.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../06_hash_based_scripts/tutorial.html">← Module 6: Hash-Based Scripts</a></div>
+  <div class="next"><a href="../08_multi_policy_intersection/tutorial.html">Module 8: Multiple-Policy Intersection →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 7 of 13</footer>
+</body>
+</html>

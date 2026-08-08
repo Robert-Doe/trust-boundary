@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 7 — strict-dynamic Propagation</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js" nonce="{{NONCE}}"></script>
+</head>
+<body>
+  <h1>Module 7 — strict-dynamic Propagation</h1>
+  <p>Policy: <code>script-src 'self' 'nonce-{{NONCE}}' 'strict-dynamic'</code></p>
+
+  <div class="proof">
+    <b>Proof A — the nonced root script itself (predict: ALLOWED, same mechanism as Module 5)</b>
+    <p id="root-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — a script dynamically inserted BY the root script, via createElement+appendChild, with NO nonce of its own (predict: ALLOWED — trust propagates)</b>
+    <p id="dynamic-child-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — a script written directly in this static HTML, no nonce, even though 'self' is ALSO in the policy (predict: BLOCKED — strict-dynamic makes 'self' ignored)</b>
+    <p id="static-child-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof C: parser-inserted (written directly in the HTML source),
+       carries no nonce. Placed BEFORE the root script so its (expected)
+       violation fires while violation-listener.js is already listening. -->
+  <script src="/static-child.js"></script>
+
+  <!-- Proof A + B: the root of trust. Everything it dynamically inserts via
+       non-parser-inserted DOM APIs (createElement + appendChild, NOT
+       innerHTML/document.write) inherits its trust under 'strict-dynamic'. -->
+  <script nonce="{{NONCE}}">
+    document.getElementById('root-proof').textContent = 'ran — root nonced script executed';
+    document.getElementById('root-proof').className = 'result allowed';
+
+    const child = document.createElement('script');
+    child.src = '/dynamic-child.js'; // NO nonce attribute set here at all
+    document.body.appendChild(child);
+  </script>
+
+  <script src="/wiring.js" nonce="{{NONCE}}"></script>
+</body>
+</html>
