@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 11 — CSP Blocks Reflected XSS</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ff7b72; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 2 · Module 11</span>CSP Blocks Reflected XSS</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../05_nonce_based_scripts/tutorial.html">Module 5: Nonce-Based Scripts</a>
+  <a class="tag-link" href="../01_no_policy_baseline/tutorial.html">Module 1: No-Policy Baseline</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+This module is the full-scale fire drill after nine modules of testing
+individual smoke detectors. Same building (the identical broken code, both
+times), same fire (the identical malicious link), one crucial difference:
+whether the suppression system (CSP) is armed. This is the module where you
+stop trusting that the individual pieces work and watch the whole chain —
+crafted link, unescaped server code, browser parser, CSP enforcement — play
+out for real, twice, side by side.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A malicious link is crafted in advance: <code>/vulnerable?q=&lt;script&gt;document.title='XSS-EXECUTED';&lt;/script&gt;</code>.</li>
+  <li>The server reflects the <code>q</code> parameter directly into the HTML response, completely unescaped — a real, textbook reflected-XSS bug.</li>
+  <li>Against <code>/vulnerable</code> (no CSP), the browser parses the injected <code>&lt;script&gt;</code> tag as a real element and executes it — the tab title changes to <code>"XSS-EXECUTED"</code>.</li>
+  <li>The exact same link, with only the path changed to <code>/protected</code>, hits a route serving the identical unescaped reflection — but now with <code>script-src 'self' 'nonce-&lt;fresh&gt;'</code> attached.</li>
+  <li>The injected script has no nonce attribute (the attacker crafted this link before that response's nonce even existed) — blocked. Tab title stays <code>"Search Results"</code>.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">Same payload: q=&lt;script&gt;document.title='XSS-EXECUTED';&lt;/script&gt;</text>
+
+    <rect x="10" y="40" width="320" height="90" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="170" y="62" text-anchor="middle" fill="#fff">/vulnerable (no CSP)</text>
+    <text x="25" y="85">tab title before: "Search Results"</text>
+    <text x="25" y="105" fill="#f85149">tab title after:  "XSS-EXECUTED"</text>
+
+    <rect x="370" y="40" width="320" height="90" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="530" y="62" text-anchor="middle" fill="#fff">/protected (nonce CSP)</text>
+    <text x="385" y="85">tab title before: "Search Results"</text>
+    <text x="385" y="105" fill="#3fb950">tab title after:  "Search Results"</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The bug, present identically on both routes — <a href="server.js">server.js</a>:</p>
+<pre><code>&lt;p&gt;You searched for: ${q}&lt;/p&gt;
+&lt;!-- q is inserted RAW. No escaping. On EITHER route. --&gt;</code></pre>
+<p>The only actual difference between the two routes:</p>
+<pre><code>const policy = csp ? \`script-src 'self' 'nonce-${'${nonce}'}'\` : null;
+// ...
+if (route.policy) headers['Content-Security-Policy'] = route.policy;</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Call this "fixed" — the injection bug is still live on both routes; only the browser-side consequence changed</li>
+      <li>Defend against an attacker who can read a specific response's nonce before crafting their payload against that SAME response (a narrower, different scenario)</li>
+      <li>Protect a sink like `innerHTML` from a DIFFERENT kind of injection that never goes through `&lt;script&gt;` parsing at all — that's Track 2's job</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Watch a real, working exploit succeed and fail against byte-identical vulnerable code</li>
+      <li>Point at exactly one header as the entire difference between "compromised" and "safe" for this attack shape</li>
+      <li>Explain precisely why a pre-crafted attack link can't include a not-yet-generated nonce</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/11_csp_blocks_reflected_xss/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:6600</code> and click each link. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">verified, both routes</div>
+  <pre><code>/vulnerable?q=&lt;script&gt;...&lt;/script&gt;  → tab title: "XSS-EXECUTED"
+/protected?q=&lt;script&gt;...&lt;/script&gt;   → tab title: "Search Results" (unchanged)
+                                          violation log: blockedURI=inline,
+                                          violatedDirective=script-src-elem</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If BOTH routes show the exploit succeeding, check your policy header is
+  actually attached to `/protected` in your network tab — a typo in the
+  route-matching logic (`parsed.pathname === '/protected'`) is the most
+  likely culprit, since the HTML-building code is intentionally identical
+  between routes.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Given that this module proves CSP genuinely stops the exploit, why does
+DECISIONS.md insist the underlying bug should still be treated as a real,
+urgent problem to fix — rather than "handled" now that CSP is in place?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Because CSP's protection here is scoped to exactly one attack shape:
+getting the browser to execute injected script. The unescaped reflection
+bug is a general HTML-injection vulnerability, and HTML injection has
+consequences CSP doesn't touch at all — an attacker could still inject
+`&lt;style&gt;` to visually deface the page (subject to `style-src`,
+separately), inject a convincing fake login form (no code execution needed
+to phish, just misleading real HTML), or, if some other page ever combines
+this same endpoint with a looser policy or none at all, the ORIGINAL
+vulnerability is sitting there ready to be fully exploited again the moment
+the CSP is misconfigured, removed, or bypassed by a mechanism this course
+hasn't covered yet. CSP is real, valuable defense in depth — the
+"in depth" part means it's a second layer, not a replacement for fixing the
+first one.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Could `/protected`'s CSP have used a hash instead of a nonce here?</div>
+  <p>No — and this is a real, structural reason, not just a style preference. A hash allowlists one exact, known-in-advance script content string. The attacker's payload is arbitrary and unknown to the server ahead of time (it comes from user input), so there's no fixed content to hash in advance. Nonces work here specifically because they don't need to know the payload — they just require a secret the attacker can't predict.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: What if the attacker's payload didn't use a `&lt;script&gt;` tag at all — say, an `&lt;img src=x onerror="...">`?</div>
+  <p>Still blocked, by the same `script-src` directive — inline event-handler attributes like `onerror="..."` are governed by `script-src` too (specifically, in stricter configurations, a `script-src-attr` sub-directive), and neither a nonce nor `'unsafe-inline'` is present to permit it. We used a plain `&lt;script&gt;` tag because it's the clearest textbook example, not because it's the only payload shape CSP happens to catch.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is `document.title` a realistic thing a real attacker would target?</div>
+  <p>No — it's a harmless, easily-observed stand-in for "attacker-controlled JavaScript executed in the victim's browser, in the victim's session, with the victim's cookies and DOM access." A real payload would more likely exfiltrate `document.cookie`, submit forms on the victim's behalf, or redirect the page — the tab title just makes success/failure trivially verifiable from outside the page for this course's purposes.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Modules 12 and 13 close out Track 1 with two more structural directives —
+<code>frame-ancestors</code> (clickjacking) and <code>form-action</code> +
+<code>base-uri</code> — that defend against attack shapes CSP's script/style
+directives don't touch at all.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../10_violation_reporting_api/tutorial.html">← Module 10: Violation Reporting API</a></div>
+  <div class="next"><a href="../12_frame_ancestors_clickjacking/tutorial.html">Module 12: frame-ancestors Clickjacking Defense →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 11 of 13</footer>
+</body>
+</html>
