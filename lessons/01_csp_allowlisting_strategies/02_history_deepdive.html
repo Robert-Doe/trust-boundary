@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Why CSP Has Three Allowlisting Mechanisms</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #a5d6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · CSP Allowlisting Strategies</span>Why CSP Even Has Three Different Mechanisms</h1>
+
+<div class="callout">
+  <span class="label">Scope note</span>
+  This page is historical/contextual background, not a verified-by-code
+  module — unlike every numbered module in this course, the claims here
+  describe the evolution of a web standard over roughly a decade and are
+  not things we ran a server to confirm. Treat it as informed context, and
+  verify specifics against the CSP spec itself if you need precision for a
+  citation.
+</div>
+
+<h2>The starting point: host-based allowlisting</h2>
+<p>
+CSP's earliest, simplest form of <code>script-src</code> allowlisting was
+exactly what Module 1's baseline made obvious the absence of: a list of
+trusted origins (<code>script-src 'self' https://cdn.example.com</code>).
+The mental model was straightforward — decide which domains you trust, list
+them, done.
+</p>
+
+<h2>Why that model broke down in practice</h2>
+<p>
+Security researchers (notably a widely-cited Google study, "CSP Is Dead,
+Long Live CSP!", presented at ACM CCS 2016) analyzed real-world CSP
+deployments and found the overwhelming majority of host-based policies
+could be bypassed. The core problem wasn't sloppy policy-writing — it was
+structural: almost any sufficiently popular CDN or script host also serves
+*something* an attacker can abuse once it's allowlisted — a JSONP endpoint
+that reflects arbitrary callback names into executable script, an old
+library version with a known gadget, an "upload a file" feature that
+happens to live on the same origin. Allowlisting a whole origin means
+trusting everything that origin will EVER serve, including things nobody
+anticipated when the policy was written.
+</p>
+
+<h2>The pivot: trust content or a secret, not a whole origin</h2>
+<p>
+Nonces and hashes (Modules 5–6) sidestep that entire problem class: they
+don't ask "do I trust this origin," they ask "do I trust this EXACT piece
+of content, right now." A hash can't be satisfied by ANY script on an
+allowlisted CDN — only the one exact byte sequence it was computed from. A
+nonce can't be guessed or reused from a different response. Both close the
+"I trusted the origin, not knowing everything it could ever serve" gap
+that made host allowlisting fragile.
+</p>
+
+<h2>Why that still wasn't enough for real, JS-heavy applications</h2>
+<p>
+Nonces and hashes work cleanly for a small, known set of inline scripts.
+They work far less cleanly for the reality of a modern JS-heavy
+application: bundlers, ad networks, and analytics/widget scripts that
+dynamically insert an unpredictable, often large number of further
+<code>&lt;script&gt;</code> tags at runtime. Hand-nonceing or
+hand-hashing every one of those isn't practical — the same research that
+diagnosed host-allowlisting's weakness also identified this as the reason
+teams reached for <code>'unsafe-inline'</code> anyway, defeating CSP's
+protection to keep their app working.
+</p>
+<p>
+<code>'strict-dynamic'</code> (Module 7) is the direct answer to that
+specific gap: keep the nonce/hash-based trust root (still no whole-origin
+trust), but let code you've already decided to trust propagate that trust
+forward to what IT loads, without needing individual credentials for every
+downstream script. It didn't replace nonces/hashes — it's built on top of
+them, solving the one thing they couldn't scale to.
+</p>
+
+<h2>The pattern, zoomed out</h2>
+<p>
+Each mechanism exists because the previous one had a real, specific,
+documented failure mode in production use — not because standards bodies
+enjoy adding options. That's worth remembering the next time a security
+feature seems to have more knobs than you'd expect: the knobs are usually
+scar tissue from a real, previously-exploited gap.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>

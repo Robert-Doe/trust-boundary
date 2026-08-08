@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Failure Modes When One Layer Is Misconfigured</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · CSP + Trusted Types Layering</span>Failure Modes When One Layer Is Misconfigured</h1>
+
+<p>
+Every scenario below is reconstructed directly from real, verified module
+results in this course — not hypothetical. Reading them side by side
+shows exactly what gap each layer leaves when the OTHER one is doing all
+the work.
+</p>
+
+<h2>Scenario A: Trusted Types only, no CSP script-src restriction</h2>
+<p>
+Suppose a page ships <code>require-trusted-types-for 'script'</code> with
+a real, careful sanitizing policy (Module 24's shape) — but never adds a
+real <code>script-src</code> restriction at all (Module 1's baseline for
+scripts specifically).
+</p>
+<div class="callout danger">
+  <span class="label">What still gets through</span>
+  A <code>&lt;script src="https://attacker.example/evil.js"&gt;</code>
+  written directly into the page's own HTML (not via a guarded sink at
+  all — <code>&lt;script src&gt;</code> written in markup is parser-inserted,
+  and Trusted Types' HTML-sink guard has no jurisdiction over static markup
+  the server itself sent). Module 1 already proved this loads and executes
+  freely with no policy of any kind present. Trusted Types' sink guard
+  never even enters the picture for content that was never assigned via a
+  sink to begin with.
+</div>
+
+<h2>Scenario B: CSP script-src only, no Trusted Types</h2>
+<p>
+Suppose a page ships the strictest possible <code>script-src 'self'
+'nonce-...'</code>, with no <code>'unsafe-inline'</code>, no
+<code>'unsafe-eval'</code> — but never adds
+<code>require-trusted-types-for</code> at all. This is exactly Module 14's
+setup.
+</p>
+<div class="callout danger">
+  <span class="label">What still gets through</span>
+  Any non-executing HTML injected via <code>innerHTML</code> — a fake
+  "Account Suspended" banner with a real link to an attacker's phishing
+  page, verbatim from Module 14's Proof B. Zero CSP violations, because
+  nothing in it tries to execute. The strictest script-src imaginable does
+  not gate this at all.
+</div>
+
+<h2>Scenario C: both layers present, but the Trusted Types policy is too permissive</h2>
+<p>
+Suppose both directives are present, but the <code>createHTML</code> rule
+(Module 17's <code>"default"</code> pattern, or any named policy) simply
+returns its input unchanged — no sanitization at all.
+</p>
+<div class="callout danger">
+  <span class="label">What still gets through</span>
+  Everything Module 14's Proof A and B both tested — a permissive policy
+  satisfies the TYPE check (Module 18) perfectly while providing none of
+  the CONTENT filtering a real sanitizer like Module 24's DOMPurify
+  integration does. Trusted Types guarantees a value went through SOME
+  policy — it says nothing about whether that policy did anything useful.
+  This is why Module 24 exists as a separate, later module: the mechanism
+  (Modules 15–20) and the actual defense quality (Module 24) are genuinely
+  different concerns.
+</div>
+
+<h2>The pattern across all three</h2>
+<p>
+Each scenario's gap is exactly the OTHER layer's core competency —
+because the two were designed, and adopted historically, to cover
+genuinely disjoint attack surfaces. Neither is a superset of the other,
+which is precisely why this course builds them as two tracks rather than
+one extended one.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>

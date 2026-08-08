@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cluster: CSP and Trusted Types Layering</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Concept Cluster · Spans Modules 3, 14, 15, 18, 24</span>CSP and Trusted Types Layering</h1>
+
+<h2 id="prereq">00 — Which Modules This Spans</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">Builds on:</span>
+  <a class="tag-link" href="../../track1-csp-core/03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+  <a class="tag-link" href="../../track2-trusted-types/14_dom_xss_sink_baseline/tutorial.html">Module 14: DOM-XSS Sink Baseline</a>
+  <a class="tag-link" href="../../track2-trusted-types/15_require_trusted_types_directive/tutorial.html">Module 15: require-trusted-types-for</a>
+  <a class="tag-link" href="../../track2-trusted-types/18_html_sink_guard/tutorial.html">Module 18: HTML Sink Guard</a>
+  <a class="tag-link" href="../../track2-trusted-types/24_sanitizer_capstone/tutorial.html">Module 24: Sanitizer Capstone</a>
+</div>
+<p>
+No single module states, end to end, exactly where CSP's job stops and
+Trusted Types' job starts. Module 14 came closest, but its scope was
+narrowly "does script-src cover this one gap" — this cluster is the place
+to state the full boundary precisely, using evidence pulled from across
+both tracks.
+</p>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+CSP's <code>script-src</code> is airport security screening luggage AS IT
+BOARDS the plane — it inspects what's about to run and can refuse
+specific dangerous items (a script from an untrusted origin, an inline
+handler with no nonce). Trusted Types is the manufacturer requiring every
+suitcase to be a SPECIFIC APPROVED MODEL before it's even allowed into the
+terminal at all — regardless of what's packed inside it. Screening is
+powerful but reactive (it inspects contents); the manufacturing
+requirement is preventative but narrow (it only governs the suitcase
+itself, not what happens once the exact-right-model suitcase is on the
+plane). Neither replaces the other; a well-run airport has both.
+</p>
+</div>
+
+<h2 id="boundary">02 — The Boundary, Stated Precisely</h2>
+<table>
+<tr><th>Question</th><th>CSP script-src answers it</th><th>Trusted Types answers it</th></tr>
+<tr><td>Can this &lt;script src&gt; load from this origin?</td><td class="result allowed">Yes — this is its core job</td><td>No opinion</td></tr>
+<tr><td>Can this inline &lt;script&gt; block execute?</td><td class="result allowed">Yes — via nonce/hash/'unsafe-inline'</td><td>No opinion (governs the ASSIGNMENT that PUT it there, if via a sink)</td></tr>
+<tr><td>Can this onerror="" handler, injected via innerHTML, fire?</td><td class="result allowed">Yes — verified in Module 14, script-src-attr covers it</td><td>N/A — never reaches this point if guarded</td></tr>
+<tr><td>Can this innerHTML assignment happen AT ALL, regardless of content?</td><td>No opinion — Module 14's central finding</td><td class="result allowed">Yes — this is its core job</td></tr>
+<tr><td>Can non-executing HTML (a phishing banner, a fake login form) be injected?</td><td>No opinion, ever</td><td class="result allowed">Yes — blocked at assignment, regardless of danger</td></tr>
+<tr><td>Can this page be framed by another origin?</td><td class="result allowed">Yes — frame-ancestors</td><td>No opinion</td></tr>
+<tr><td>Can this form submit to an untrusted origin?</td><td class="result allowed">Yes — form-action</td><td>No opinion</td></tr>
+</table>
+
+<h2 id="map">03 — Where Each Layer Sits, Visually</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <text x="350" y="20" text-anchor="middle" fill="#fff" font-size="13">A string is about to reach a dangerous sink</text>
+
+    <rect x="10" y="40" width="330" height="100" rx="8" fill="#161b22" stroke="#79c0ff" stroke-width="2"/>
+    <text x="175" y="62" text-anchor="middle" fill="#fff" font-size="12">STAGE 1: Trusted Types</text>
+    <text x="25" y="85">Is this value a real TrustedHTML/</text>
+    <text x="25" y="100">TrustedScript, from an authorized policy?</text>
+    <text x="25" y="120" fill="#f85149">NO → TypeError, stops HERE</text>
+
+    <rect x="360" y="40" width="330" height="100" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="62" text-anchor="middle" fill="#fff" font-size="12">STAGE 2: CSP script-src</text>
+    <text x="375" y="85">If it's a script that then tries to</text>
+    <text x="375" y="100">RUN — is ITS origin/nonce/hash allowed?</text>
+    <text x="375" y="120" fill="#f85149">NO → blocked, violation logged</text>
+
+    <text x="350" y="170" text-anchor="middle" fill="#e3b341" font-size="12">Only a value that passes BOTH stages ever executes.</text>
+    <text x="350" y="190" text-anchor="middle" fill="#8b949e" font-size="11">Non-executing HTML only ever needs to clear Stage 1 — it never reaches Stage 2 at all.</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Evidence, Pulled From Across Both Tracks</h2>
+<p>Module 14 proved CSP's blind spot, under the strictest reasonable script-src:</p>
+<pre><code>// Module 14, Proof B — zero script, zero handlers:
+target.innerHTML = '&lt;div class="fake-alert"&gt;...&lt;a href="http://evil.example"&gt;...&lt;/a&gt;&lt;/div&gt;';
+// → innerHTML assignment completed with ZERO errors, ZERO CSP involvement</code></pre>
+<p>Module 15 proved Trusted Types closes exactly that gap, and ONLY that gap:</p>
+<pre><code>// Module 15 — the SAME payload shape, now with require-trusted-types-for:
+// THREW: TypeError: ... This document requires 'TrustedHTML' assignment.
+// (identical error for dangerous AND harmless content — a categorical block)</code></pre>
+<p>Module 24 proved the two layers coexist in one real policy without conflict:</p>
+<pre><code>script-src 'self' 'nonce-...'; require-trusted-types-for 'script'; trusted-types dompurify dompurify-policy
+// ^ one header, one policy string — CSP directives and Trusted Types
+//   directives are just more entries in the same list</code></pre>
+
+<h2 id="limits">05 — What Neither Layer Covers</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ NEITHER covers</h4>
+    <ul>
+      <li>Reading `document.cookie` or making arbitrary `fetch()` calls once script is already running legitimately</li>
+      <li>Server-side vulnerabilities (SQL injection, auth bypass) — this entire course is browser-side enforcement</li>
+      <li>A user being socially engineered into typing their own password into a convincing fake form THEY navigated to directly (not injected)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ Together they cover</h4>
+    <ul>
+      <li>Script execution from untrusted origins/inline sources (CSP)</li>
+      <li>Structural page hijacking: clickjacking, form hijacking, base-tag hijacking (CSP)</li>
+      <li>Any raw string reaching a dangerous DOM sink, executable or not (Trusted Types)</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="deepdives">Deep Dives</h2>
+<ul class="step-list">
+  <li><a href="02_failure_modes_deepdive.html">02 — Failure Modes When One Layer Is Misconfigured</a> — what a gap in EACH layer alone actually looks like in practice, with the specific modules that demonstrate each half</li>
+  <li><a href="03_real_world_adoption_deepdive.html">03 — Real-World Adoption Order</a> — why teams almost always ship CSP first and Trusted Types second, and what that migration path actually looks like</li>
+</ul>
+
+<footer class="course-footer">Concept Cluster · <a href="../README.md">All Clusters</a> · Relates to Track 1 Module 3 and Track 2 Modules 14, 15, 18, 24</footer>
+</body>
+</html>

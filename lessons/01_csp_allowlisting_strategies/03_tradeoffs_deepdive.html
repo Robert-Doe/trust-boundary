@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Real-World Adoption Tradeoffs</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #a5d6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · CSP Allowlisting Strategies</span>Real-World Adoption Tradeoffs</h1>
+
+<div class="callout">
+  <span class="label">Scope note</span>
+  Like this cluster's history page, this is contextual/operational
+  guidance, not a claim verified by a server in this course. The
+  underlying mechanics (nonce timing, hash determinism, strict-dynamic
+  propagation) ARE verified — Modules 5–7 — this page reasons about their
+  consequences at production scale, which no single module's demo attempts.
+</div>
+
+<h2>The caching cost nonces impose, concretely</h2>
+<p>
+A CDN or reverse-proxy cache typically keys cached responses by URL, and
+serves the identical cached body to every visitor. A nonce embedded in the
+HTML breaks that model outright: if the nonce is baked into a cached
+response, every visitor gets the SAME nonce — which Module 5's Proof D
+showed is exactly the failure mode that makes a nonce meaningless (a
+reused nonce is not a nonce). Sites that need both full-page HTTP caching
+AND nonce-based CSP generally solve this with edge-side dynamic
+substitution (inserting a fresh nonce into an otherwise-cached response at
+the CDN layer) — real, but real infrastructure complexity Module 5's
+single-server demo never had to contend with.
+</p>
+
+<h2>The build-pipeline cost hashes impose, concretely</h2>
+<p>
+A hash is only as good as the last time it was recomputed. In a real build
+pipeline, that means: every time a template containing a hashed inline
+script changes — even a whitespace-only reformat, as Module 6's DECISIONS.md
+demonstrated — the deployed hash must be regenerated and redeployed
+together with the new content, atomically. A CI step that forgets this
+(or a template change that ships slightly out of sync with a
+separately-cached CSP header) reproduces Module 6's Proof B: legitimate
+content silently blocked, indistinguishable at a glance from an actual
+attack being stopped.
+</p>
+
+<h2>Why most large, JS-heavy sites converge on nonce + strict-dynamic</h2>
+<p>
+Given the two costs above, a common real-world shape emerges: use a nonce
+(accepting the caching complexity) for the ONE entry-point bootstrap
+script, then lean on <code>'strict-dynamic'</code> so that script's own
+bundler-driven loading of everything else needs no further per-script
+credentials at all — sidestepping hash's build-pipeline fragility for
+the bulk of an application's script surface, while confining nonce's
+caching cost to a single, small, root script. This isn't a rule CSP
+enforces — it's an emergent pattern from the tradeoffs above, worth
+recognizing when you see it in a real site's headers.
+</p>
+
+<h2>What none of these mechanisms solve</h2>
+<p>
+All three are about controlling WHICH scripts can run. None of them
+address a completely different problem this course's Track 2 exists for:
+scripts that were never "loaded" from anywhere at all, because they arrived
+as a string handed directly to <code>innerHTML</code> or <code>eval</code>.
+That's not a gap in nonce/hash/strict-dynamic design — it's a different
+attack surface entirely, which is why Track 2 exists as a separate applied
+layer rather than a fourth CSP allowlisting keyword. See
+<a href="../02_csp_trusted_types_layering/01_explainer.html">the CSP/Trusted
+Types layering cluster</a> for that boundary made explicit.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>

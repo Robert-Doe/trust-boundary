@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Real-World Adoption Order</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · CSP + Trusted Types Layering</span>Real-World Adoption Order</h1>
+
+<div class="callout">
+  <span class="label">Scope note</span>
+  Contextual/operational reasoning, not a claim this course ran code to
+  verify — unlike the mechanics it discusses, which every cited module did
+  verify.
+</div>
+
+<h2>Why CSP almost always ships first</h2>
+<p>
+A basic <code>script-src</code> policy can often be added to an existing
+application with comparatively contained blast radius: it mostly affects
+WHERE scripts load from and WHETHER inline scripts/eval run, which a team
+can audit by grepping their own codebase for inline
+<code>&lt;script&gt;</code> tags and <code>eval</code>/<code>Function</code>
+usage. Painful, but bounded and enumerable.
+</p>
+
+<h2>Why Trusted Types tends to ship later, and why that's not laziness</h2>
+<p>
+<code>require-trusted-types-for</code> affects every single call site that
+assigns to a guarded sink, across an entire codebase and every third-party
+library it depends on — and Module 19's real finding (the
+<code>Function</code> constructor's incomplete Trusted Types support) is
+exactly the kind of surprise that makes this riskier to enable blind. A
+team can't safely flip it on without first knowing how many sink call
+sites exist and which of their dependencies even work correctly under it.
+</p>
+
+<h2>The real migration shape this course's own modules mirror</h2>
+<p>
+Module 17's <code>"default"</code> policy pattern is not a pedagogical
+simplification — it's the actual real-world on-ramp: ship
+<code>require-trusted-types-for</code> alongside a permissive
+<code>"default"</code> policy first (avoiding an instant outage), observe
+real violations via Module 21's reporting pipeline in production, then
+progressively either tighten the default policy's rule or migrate specific
+call sites to their own named, narrowly-scoped policies (Module 16's
+pattern) — shrinking what the permissive default has to cover over time.
+</p>
+
+<h2>Where Module 20's allowlist fits into that timeline</h2>
+<p>
+The <code>trusted-types</code> policy-name allowlist (Module 20) is
+typically tightened LAST, once a team knows the final, settled set of
+policy names their application actually needs — adding it too early, before
+the migration above has stabilized which policies exist, would just mean
+constantly editing the allowlist as new legitimate policies get introduced
+during migration.
+</p>
+
+<h2>The throughline</h2>
+<p>
+Every module in Phase 3 of Track 2 (Modules 17, 20, 21) that might look
+like "extra mechanism" in isolation is really infrastructure for exactly
+this staged rollout — not for a green-field application that gets to
+enable everything strictly from day one.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Prototype Pollution as a General JS Vulnerability Class</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · Trusted Types + Prototypes</span>Prototype Pollution as a General JS Vulnerability Class</h1>
+
+<div class="callout warn">
+  <span class="label">Don't over-generalize Module 23's finding</span>
+  Module 23 proved prototype pollution specifically CANNOT forge a Trusted
+  Types value. That is a narrow, verified claim about ONE mechanism. This
+  page is about the much broader, very real vulnerability class prototype
+  pollution belongs to — where it absolutely CAN cause real damage, in
+  code that isn't protected by an internal slot.
+</div>
+
+<h2>The general shape of the vulnerability</h2>
+<p>
+Prototype pollution vulnerabilities typically arise in utility functions
+that recursively merge or set properties on objects using
+attacker-controlled KEYS — a "deep merge," "extend," or "set nested
+property by path" function that doesn't guard against the key literally
+being the string <code>"__proto__"</code> (or <code>"constructor"</code> /
+<code>"prototype"</code>, reaching the same place a different way).
+</p>
+<pre><code>function unsafeMerge(target, source) {
+  for (const key in source) {
+    if (typeof source[key] === 'object') {
+      target[key] = target[key] || {};
+      unsafeMerge(target[key], source[key]); // recurses into target["__proto__"]!
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+unsafeMerge({}, JSON.parse('{"__proto__":{"polluted":"yes"}}'));
+({}).polluted; // "yes" — EVERY object in the process now has this</code></pre>
+<p>
+This is the exact mechanic Module 23's Attack A used deliberately, on
+purpose, to test Trusted Types — but here it arrives by accident, through
+attacker-controlled JSON reaching an unguarded merge function.
+</p>
+
+<h2>Why this became a well-known, widely-patched vulnerability class</h2>
+<p>
+Several widely-used JavaScript utility libraries — most notably several
+versions of Lodash's deep-merge/defaults functions — had real, disclosed
+prototype pollution vulnerabilities patched over the years, because their
+recursive merge logic didn't special-case dangerous keys. Because these
+utilities sit underneath enormous numbers of applications, a pollution bug
+in one shared dependency could affect any application using it, without
+that application's own code containing any obviously "unsafe" pattern
+itself.
+</p>
+
+<h2>Where pollution actually causes damage — the code that trusts it</h2>
+<p>
+Pollution by itself is inert until something downstream TRUSTS the
+polluted state. Real damage patterns include:
+</p>
+<ul>
+  <li><strong>Property-presence checks used as authorization</strong>: code like <code>if (user.isAdmin) { ... }</code> — pollution can inject <code>isAdmin</code> onto every object, including ones that never legitimately had it set.</li>
+  <li><strong>Configuration objects with silently-inherited defaults</strong>: a library that reads <code>options.someFlag</code> without an <code>Object.hasOwn</code> check may read an attacker-injected value instead of its intended default.</li>
+  <li><strong>Template engines and other code that eventually reaches a dangerous sink</strong>: some real disclosed exploit chains combined prototype pollution with a downstream template-rendering or `child_process` call that trusted a polluted configuration value, turning a "just" pollution bug into remote code execution.</li>
+</ul>
+
+<h2>Why "internal-slot-guarded" code (like Trusted Types) is immune, and ordinary code usually isn't</h2>
+<p>
+The reason Module 23's attack failed against Trusted Types is specific and
+narrow: the sink's real check never consults any property reachable
+through the prototype chain AT ALL, polluted or not. Ordinary application
+code, almost by definition, DOES read properties through the prototype
+chain constantly — that's what makes JavaScript's object model convenient
+day to day. The defense against prototype pollution for your OWN code
+isn't "hope it behaves like Trusted Types" — it's concrete, standard
+mitigations: use <code>Object.create(null)</code> for objects meant purely
+as key/value maps, use <code>Map</code> instead of plain objects for
+untrusted-keyed data, use <code>Object.hasOwn(obj, key)</code> rather than
+<code>key in obj</code> or truthy checks, and reject
+<code>"__proto__"</code>/<code>"constructor"</code>/<code>"prototype"</code>
+as keys explicitly in any merge/set-by-path utility that accepts external
+input.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>

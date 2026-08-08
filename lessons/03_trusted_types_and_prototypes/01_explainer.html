@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cluster: Trusted Types and Prototypal Inheritance</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Concept Cluster · Spans Prereq 04, Modules 16, 22, 23</span>Trusted Types and Prototypal Inheritance</h1>
+
+<h2 id="prereq">00 — Which Modules This Spans</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">Builds on:</span>
+  <a class="tag-link" href="../../prerequisites/04_js_prototype_chain.html">js-prototype-chain</a>
+  <a class="tag-link" href="../../track2-trusted-types/16_policy_factory/tutorial.html">Module 16: Policy Factory</a>
+  <a class="tag-link" href="../../track2-trusted-types/22_brand_check_instanceof/tutorial.html">Module 22: Brand Check via instanceof</a>
+  <a class="tag-link" href="../../track2-trusted-types/23_forged_object_defense/tutorial.html">Module 23: Forged-Object Defense</a>
+</div>
+<p>
+This is the cluster that answers, directly and completely, the question
+this whole second track exists partly to answer: <strong>how does Trusted
+Types relate to prototypal inheritance?</strong> The prerequisites page
+set up the mechanism; Modules 22–23 tested it against real forgery
+attempts; this page is where the full answer gets stated in one place,
+with the deep-dives providing the "why does JavaScript work this way at
+all" context no single module's code motivates.
+</p>
+
+<h2 id="analogy">01 — The Big Analogy, Completed</h2>
+<div class="analogy-box">
+<p>
+Recall the RFID-badge analogy from Module 22: <code>instanceof</code> is a
+visual/paperwork check (spoofable), the sink's real check is an embedded
+chip a reader queries directly (not spoofable via paperwork). Here's the
+piece that completes the picture: prototypal inheritance IS the
+paperwork system. It's real, useful, and load-bearing for almost
+everything else in JavaScript — every array method, every string method,
+every object method you've ever called relies on prototype-chain lookup
+working correctly. Trusted Types doesn't distrust prototypal inheritance
+as a mechanism; it simply declines to use it for the ONE decision where
+"can this specific piece of paperwork be forged by the person presenting
+it" matters more than "is this convenient and how JS normally works."
+</p>
+</div>
+
+<h2 id="steps">02 — The Full Chain of Reasoning, Assembled</h2>
+<ol class="step-list">
+  <li><strong>Prerequisite fact:</strong> <code>instanceof</code> is purely a prototype-chain walk — it asks "does <code>X.prototype</code> appear anywhere in this object's chain," nothing more.</li>
+  <li><strong>Prerequisite fact:</strong> <code>Object.create(X.prototype)</code> lets ANY code construct an object whose chain contains <code>X.prototype</code>, with zero involvement from <code>X</code>'s own constructor logic.</li>
+  <li><strong>Consequence:</strong> any security check written as <code>if (x instanceof TrustedHTML) { /* treat as safe */ }</code> would be trivially defeatable by exactly this construction.</li>
+  <li><strong>Module 16's fact:</strong> a real <code>TrustedHTML</code> is produced by a policy's <code>createHTML</code> method — a real, specific code path, not just "any object with the right prototype."</li>
+  <li><strong>Module 22's finding:</strong> the browser's REAL sink guard is not, in fact, written as <code>instanceof</code> — a forged object that passes <code>instanceof TrustedHTML</code> is still rejected, with a categorically different error ("Illegal invocation" vs. "requires TrustedHTML assignment").</li>
+  <li><strong>Module 23's finding:</strong> that resistance holds even against prototype pollution, reassigning the global <code>TrustedHTML</code> identifier, using a different prototype-linking API, and replaying stolen content — because none of those attacks touch the actual mechanism (an internal slot) the guard checks.</li>
+</ol>
+
+<h2 id="map">03 — Two Different Security Models, Side by Side</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="170" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="12">Prototype-based check (fragile)</text>
+    <text x="25" y="65">if (x instanceof TrustedHTML)</text>
+    <text x="25" y="85">  trustIt(x);</text>
+    <text x="25" y="115" fill="#f85149">Object.create(TrustedHTML.prototype)</text>
+    <text x="25" y="133" fill="#f85149">→ satisfies this check completely</text>
+    <text x="25" y="160" fill="#8b949e">Reachable from ANY JS code,</text>
+    <text x="25" y="175" fill="#8b949e">any time, no special access needed</text>
+
+    <rect x="360" y="20" width="330" height="170" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="12">Internal-slot check (what the sink uses)</text>
+    <text x="375" y="65">[[sink internal check]]</text>
+    <text x="375" y="85">  requires [[TrustedHTMLData]] slot</text>
+    <text x="375" y="115" fill="#3fb950">Object.create(...) cannot set it</text>
+    <text x="375" y="133" fill="#3fb950">→ only createHTML()'s own algorithm can</text>
+    <text x="375" y="160" fill="#8b949e">Not reachable from JS at all —</text>
+    <text x="375" y="175" fill="#8b949e">no property, no method exposes it</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="deepdives">Deep Dives</h2>
+<ul class="step-list">
+  <li><a href="02_internal_slots_deepdive.html">02 — Internal Slots: A Pattern Bigger Than Trusted Types</a> — the same "state JS can't touch" idea underlies <code>Promise</code>, <code>Map</code>, <code>ArrayBuffer</code>, and more</li>
+  <li><a href="03_prototype_pollution_deepdive.html">03 — Prototype Pollution as a General JS Vulnerability Class</a> — where THIS mechanism genuinely IS a real, exploitable problem, outside the narrow case Module 23 tested</li>
+</ul>
+
+<footer class="course-footer">Concept Cluster · <a href="../README.md">All Clusters</a> · Relates to Prerequisites Module 4 and Track 2 Modules 16, 22, 23</footer>
+</body>
+</html>

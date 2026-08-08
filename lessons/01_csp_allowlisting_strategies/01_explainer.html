@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cluster: CSP Allowlisting Strategies</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #a5d6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Concept Cluster · Spans Modules 5, 6, 7</span>CSP Allowlisting Strategies</h1>
+
+<h2 id="prereq">00 — Which Modules This Spans</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">Builds on:</span>
+  <a class="tag-link" href="../../track1-csp-core/05_nonce_based_scripts/tutorial.html">Module 5: Nonce-Based Scripts</a>
+  <a class="tag-link" href="../../track1-csp-core/06_hash_based_scripts/tutorial.html">Module 6: Hash-Based Scripts</a>
+  <a class="tag-link" href="../../track1-csp-core/07_strict_dynamic/tutorial.html">Module 7: strict-dynamic Propagation</a>
+</div>
+<p>
+Each of those three modules proved ONE mechanism works, in isolation, with its own server and its own proofs. None of them, individually, is the right place to answer the question a real team actually has to answer: <em>which one should we use, and why?</em> That comparison belongs here, not bolted onto any single module.
+</p>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Three different ways to prove someone's allowed backstage at a concert.
+A <strong>nonce</strong> is a wristband printed at the door, tonight only —
+perfect for content that's freshly generated on every single visit, useless
+if you need to hand out passes in advance. A <strong>hash</strong> is a
+laminated card matching an exact, pre-approved photo — perfect for a fixed
+guest list that never changes, worthless the moment someone's hair
+changes even slightly. <strong>strict-dynamic</strong> isn't a credential
+at all — it's "anyone person X personally vouches for and walks in
+themselves is in," which solves a problem neither wristbands nor
+laminated cards solve well: an unpredictable, runtime-determined chain of
+trust.
+</p>
+</div>
+
+<h2 id="compare">02 — Side-by-Side Comparison</h2>
+<table>
+<tr><th></th><th>Nonce (Module 5)</th><th>Hash (Module 6)</th><th>strict-dynamic (Module 7)</th></tr>
+<tr><td><b>What it keys on</b></td><td>A per-response random secret</td><td>The exact byte content</td><td>Trust already established elsewhere</td></tr>
+<tr><td><b>Server-side state?</b></td><td>Yes — fresh randomness every response</td><td>No — deterministic from content</td><td>No — riding on a nonce/hash root</td></tr>
+<tr><td><b>Breaks if...</b></td><td>...reused across responses</td><td>...content changes by even one byte (including whitespace)</td><td>...the root script itself isn't trusted</td></tr>
+<tr><td><b>Best fit</b></td><td>Server-templated inline content that changes per request</td><td>Fixed, static inline scripts (a bootstrap snippet, an analytics stub)</td><td>Bundler/loader output — an unpredictable, runtime-determined set of further scripts</td></tr>
+<tr><td><b>Verified in this course</b></td><td>Two requests, two different nonces</td><td>Two requests, IDENTICAL hash (deterministic)</td><td>Own infra scripts got blocked too — <code>'self'</code> fully disabled</td></tr>
+</table>
+
+<h2 id="map">03 — Decision Diagram</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="350" y="25" text-anchor="middle" fill="#fff" font-size="13">Does this inline script's CONTENT change per response?</text>
+
+    <line x1="350" y1="35" x2="180" y2="70" stroke="#8b949e"/>
+    <line x1="350" y1="35" x2="520" y2="70" stroke="#8b949e"/>
+    <text x="230" y="60" fill="#3fb950">yes</text>
+    <text x="470" y="60" fill="#f85149">no</text>
+
+    <rect x="60" y="75" width="240" height="55" rx="6" fill="#161b22" stroke="#a5d6ff"/>
+    <text x="180" y="100" text-anchor="middle">Use a NONCE (Module 5)</text>
+    <text x="180" y="118" text-anchor="middle" font-size="10" fill="#8b949e">per-response secret, regenerated every time</text>
+
+    <rect x="400" y="75" width="240" height="55" rx="6" fill="#161b22" stroke="#d2a8ff"/>
+    <text x="520" y="100" text-anchor="middle">Use a HASH (Module 6)</text>
+    <text x="520" y="118" text-anchor="middle" font-size="10" fill="#8b949e">no server state needed, breaks on any edit</text>
+
+    <text x="350" y="165" text-anchor="middle" fill="#fff" font-size="13">Does a trusted script need to load an UNPREDICTABLE</text>
+    <text x="350" y="182" text-anchor="middle" fill="#fff" font-size="13">set of further scripts at runtime (a bundler/loader)?</text>
+
+    <rect x="180" y="200" width="340" height="55" rx="6" fill="#161b22" stroke="#79c0ff"/>
+    <text x="350" y="225" text-anchor="middle">Add 'strict-dynamic' (Module 7) on top of a nonce/hash root</text>
+    <text x="350" y="243" text-anchor="middle" font-size="10" fill="#8b949e">propagates trust; disables 'self' entirely for parser-inserted scripts</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Compared</h2>
+<p>Same problem — allowlist ONE inline script — three different mechanisms, drawn from the actual verified modules:</p>
+<pre><code>// Module 5: nonce — server generates it fresh
+const nonce = crypto.randomBytes(16).toString('base64');
+const policy = \`script-src 'self' 'nonce-\${nonce}'\`;
+
+// Module 6: hash — computed once from fixed content, same every time
+const hash = crypto.createHash('sha256').update(ALLOWED_SCRIPT, 'utf8').digest('base64');
+const policy = \`script-src 'self' 'sha256-\${hash}'\`;
+
+// Module 7: strict-dynamic — trust propagates from a nonce root
+const policy = \`script-src 'nonce-\${nonce}' 'strict-dynamic'\`;
+// (a script the root creates via createElement+appendChild inherits trust,
+//  with NO nonce/hash of its own)</code></pre>
+
+<h2 id="tradeoffs">05 — Operational Tradeoffs (Beyond What Any One Module Tested)</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>⚠ Nonces cost you</h4>
+    <ul>
+      <li>Every response must be dynamically rendered — no full-page HTTP caching of the HTML itself</li>
+      <li>Requires server-side templating wired into every response that needs an inline script</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>⚠ Hashes cost you</h4>
+    <ul>
+      <li>A build step to recompute hashes whenever the script content changes — miss one and the deployment breaks silently</li>
+      <li>Doesn't scale to many distinct inline scripts — each needs its own hash entry</li>
+    </ul>
+  </div>
+</div>
+<p>
+<code>strict-dynamic</code> avoids both costs for the scripts it covers, but only shifts the trust question one level up: you still need ONE nonce or hash to establish the root of trust in the first place — it doesn't eliminate the choice above, it extends whichever one you picked.
+</p>
+
+<h2 id="deepdives">Deep Dives</h2>
+<ul class="step-list">
+  <li><a href="02_history_deepdive.html">02 — History: Why CSP Even Has Three Different Mechanisms</a> — how `'unsafe-inline'` came first, why it failed, and what problem each later addition specifically solved</li>
+  <li><a href="03_tradeoffs_deepdive.html">03 — Real-World Adoption Tradeoffs</a> — CDN/caching interactions, build-pipeline integration, and why most large sites converge on nonce + strict-dynamic</li>
+</ul>
+
+<footer class="course-footer">Concept Cluster · <a href="../README.md">All Clusters</a> · Relates to Track 1 Modules 5–7</footer>
+</body>
+</html>

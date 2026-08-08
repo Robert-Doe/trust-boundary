@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Dive: Internal Slots, A Pattern Bigger Than Trusted Types</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ffa657; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Deep Dive · Trusted Types + Prototypes</span>Internal Slots: A Pattern Bigger Than Trusted Types</h1>
+
+<p>
+Module 22 found that a Trusted-Types-guarded sink doesn't rely on
+<code>instanceof</code>. It turns out this isn't a one-off design choice
+invented for Trusted Types — it's the SAME pattern JavaScript's own
+built-in <code>Map</code> uses, and we can verify that directly, the same
+way this course verifies everything else.
+</p>
+
+<h2>The exact same forgery, against Map instead of TrustedHTML</h2>
+<div class="run-block">
+  <div class="run-label">node -e "..." → actual stdout</div>
+  <pre><code>const fakeMap = Object.create(Map.prototype);
+fakeMap instanceof Map;      // true  ← spoofed, exactly like Module 22's TrustedHTML forgery
+fakeMap.get('x');            // THROWS:
+// TypeError: Method Map.prototype.get called on incompatible receiver #&lt;Map&gt;</code></pre>
+</div>
+<p>
+Same shape, same result: passes <code>instanceof</code>, still rejected by
+the real method — because <code>Map.prototype.get</code>, like a Trusted
+Types sink, doesn't trust the prototype chain. It checks for an internal
+slot (informally called <code>[[MapData]]</code> in the spec) that only a
+real <code>new Map()</code> construction ever sets.
+</p>
+
+<h2>The general pattern, and why it exists everywhere it does</h2>
+<p>
+ECMAScript defines internal slots as state that exists ON a spec-level
+object but is explicitly NOT exposed as an ordinary property — no key you
+can enumerate, no descriptor you can copy, nothing <code>Object.create</code>
+or <code>Object.setPrototypeOf</code> can ever set from outside the one
+algorithm authorized to. Built-ins that maintain some invariant they can't
+allow arbitrary code to fake almost always use this pattern:
+</p>
+<table>
+<tr><th>Built-in</th><th>What the internal slot protects</th></tr>
+<tr><td><code>Promise</code></td><td>Its resolution state — so <code>.then()</code> can't be tricked into treating a plain object as an already-settled promise</td></tr>
+<tr><td><code>Map</code> / <code>Set</code></td><td>Its actual key/value storage — verified above</td></tr>
+<tr><td><code>ArrayBuffer</code> / typed arrays</td><td>The real underlying byte buffer — prevents a fake object from claiming to own memory it doesn't</td></tr>
+<tr><td><code>Date</code></td><td>Its internal numeric timestamp, independent of any property you could set on a fake date-like object</td></tr>
+<tr><td><code>TrustedHTML</code> / <code>TrustedScript</code> / <code>TrustedScriptURL</code></td><td>Verified in Module 22 — the wrapped, policy-approved content</td></tr>
+</table>
+
+<h2>Why this matters beyond trivia</h2>
+<p>
+Recognizing this pattern means you can predict, without testing every
+single built-in individually, which JS APIs are likely to resist
+prototype-based forgery (anything guarding a real invariant it can't let
+arbitrary code fake) versus which are just ordinary objects/classes you
+wrote yourself, where <code>instanceof</code> really is the whole check
+(and really is exactly as forgeable as the prerequisites page warned).
+Trusted Types isn't a special exception to how JavaScript works — it's an
+application of a well-established, decades-old platform pattern to a
+new problem.
+</p>
+
+<footer class="course-footer">Concept Cluster · <a href="01_explainer.html">← Back to Explainer</a> · <a href="../README.md">All Clusters</a></footer>
+</body>
+</html>
