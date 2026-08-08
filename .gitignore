@@ -1,0 +1,25 @@
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code / agent workspace
+.claude/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (Module 2/3's tiny header server, violation-report collector, etc.)
+node_modules/
+npm-debug.log
+
+# Misc build/output
+dist/
+build/
+*.tmp
