@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 14 — DOM-XSS Sink Baseline</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #f778ba; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 14</span>DOM-XSS Sink Baseline</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/02_dom_sinks.html#innerhtml-sink">innerhtml-sink</a>
+  <a class="tag-link" href="../../track1-csp-core/13_form_action_base_uri/tutorial.html">Module 13: form-action + base-uri (Track 1 complete)</a>
+  <a class="tag-link" href="../../track1-csp-core/11_csp_blocks_reflected_xss/tutorial.html">Module 11: CSP Blocks Reflected XSS</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Track 1's checkpoints (Module 3 onward) all check ID at the door: is this
+specific PERSON (this script, this frame, this form target) on the
+allowlist? A metal detector is a different kind of checkpoint entirely —
+it doesn't check who you are at all, it checks what category of OBJECT
+you're carrying, regardless of your identity. <code>innerHTML</code> is a
+door with no checkpoint of either kind: it lets absolutely anything through,
+and only certain things that get through later — specifically, things that
+try to actively DO something — run into Track 1's script-src checkpoint
+further inside the building. Something that just quietly changes the
+building's own signage never encounters a checkpoint at all.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends the strictest reasonable CSP from Track 1: <code>script-src 'self' 'nonce-&lt;fresh&gt;'</code>, no exceptions.</li>
+  <li>Page script assigns a string containing an <code>&lt;img onerror="..."&gt;</code> handler to <code>innerHTML</code>.</li>
+  <li>The assignment itself succeeds instantly — <code>innerHTML</code> never inspects, validates, or refuses the string.</li>
+  <li>When the browser later tries to actually FIRE that handler, THAT's the moment CSP's script-src-attr check runs — and blocks it.</li>
+  <li>A second string, containing zero executable content (just a fake alert banner with a real link), is assigned to a different element's <code>innerHTML</code>.</li>
+  <li>It renders completely, instantly, with no CSP check ever triggered — there was nothing in it for script-src to have jurisdiction over.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">innerHTML = "..."  (identical call shape, both proofs)</text>
+
+    <rect x="10" y="40" width="330" height="150" rx="8" fill="#161b22" stroke="#e3b341" stroke-width="2"/>
+    <text x="175" y="62" text-anchor="middle" fill="#fff" font-size="12">Proof A: has onerror=""</text>
+    <text x="25" y="85" fill="#3fb950">sink: accepted, no error</text>
+    <text x="25" y="105">DOM: &lt;img&gt; element inserted</text>
+    <text x="25" y="130">handler tries to fire →</text>
+    <text x="25" y="150" fill="#f85149">CSP script-src-attr: BLOCKED</text>
+
+    <rect x="360" y="40" width="330" height="150" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="525" y="62" text-anchor="middle" fill="#fff" font-size="12">Proof B: pure HTML + link</text>
+    <text x="375" y="85" fill="#3fb950">sink: accepted, no error</text>
+    <text x="375" y="105">DOM: full banner inserted</text>
+    <text x="375" y="130">nothing tries to "fire" —</text>
+    <text x="375" y="150" fill="#f85149">it's just live, rendered content</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Identical sink call, different payloads — <a href="server.js">server.js</a>:</p>
+<pre><code>// Proof A
+target_a.innerHTML = '&lt;img src="x" onerror="...">';   // CSP blocks the handler when it fires
+
+// Proof B — no script, no handler, nothing for script-src to check
+target_b.innerHTML = '&lt;div class="fake-alert"&gt;&lt;strong&gt;⚠ Account Suspended&lt;/strong&gt;' +
+                      '&lt;p&gt;...&lt;a href="http://localhost:7101/phish"&gt;Click here...&lt;/a&gt;&lt;/p&gt;&lt;/div&gt;';</code></pre>
+<p>
+This module's real design pivot — we tested four executable-payload shapes
+before writing any of this, expecting CSP to miss them, and found the
+opposite. Full story in <a href="DECISIONS.md">DECISIONS.md</a>.
+</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Make `innerHTML` refuse a raw string at all, for any reason — nothing built so far can do that</li>
+      <li>Distinguish "safe HTML a developer trusts" from "unsafe HTML from user input" at the point of assignment</li>
+      <li>Get any signal (violation, error, warning) when non-executing HTML injection happens — it's completely invisible to every tool built in this course so far</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Correctly state exactly what CSP's script-src does and doesn't cover, based on direct verification rather than assumption</li>
+      <li>Recognize `innerHTML` (and its sink relatives) as accepting any string unconditionally, with zero built-in judgment</li>
+      <li>Identify the precise, narrow, real gap that motivates Trusted Types — not an exaggerated one</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/14_dom_xss_sink_baseline/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7100</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — handler did NOT run — sink accepted the string, but CSP blocked
+          the onerror handler when it tried to fire
+Proof B — ⚠ Account Suspended / Unusual activity detected. Click here to
+          verify your identity. [real link, rendered, live]
+          "innerHTML assignment completed with ZERO errors, ZERO CSP
+          involvement"
+
+Live CSP violation log: [{"blockedURI":"inline","violatedDirective":"script-src-attr"}]</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof B's banner doesn't render at all, check that you haven't
+  accidentally set a `style-src` anywhere — this module's policy is
+  script-src ONLY, and Proof B's markup uses a CSS class (not an inline
+  style attribute) specifically so it isn't affected by that directive
+  either way. If Proof A's handler DOES run, your browser or CSP
+  implementation may not enforce `script-src-attr` the way this module's
+  environment did — worth investigating further, not just dismissing.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Before writing this module, our working assumption was that CSP script-src
+leaves `innerHTML`-injected event handlers completely unblocked. Direct
+testing proved that assumption wrong. Why does this course choose to show
+you that wrong assumption and the correction, instead of just quietly
+writing the module around the correct answer from the start?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Because the corrected finding is MORE useful precisely because it's
+narrower and more surprising than the naive version. "CSP doesn't stop
+DOM-XSS at all" is a common but imprecise claim that leads people to either
+distrust CSP more than they should, or to reach for Trusted Types for the
+wrong reason (to block script execution CSP was already blocking). The
+real, verified reason to want Trusted Types — that it governs ALL HTML
+structure reaching a sink, not just the executable parts — is a sharper,
+more defensible argument, and you only get to that sharper argument by
+actually testing the naive assumption and watching it fail. This is the
+same verification discipline the whole course runs on, applied to the
+course's OWN working assumptions, not just to claims about the browser.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Is a fake "Account Suspended" banner really a serious security issue, compared to actual code execution?</div>
+  <p>Yes, and arguably it's the harder one to defend against with traditional tools, precisely because it doesn't execute anything. Phishing via injected HTML doesn't need to steal a session token directly — it just needs to convince a user to hand over credentials on what looks like a legitimate page. No CSP directive is designed to judge whether rendered content is deceptive; that's a content/trust problem, not an execution problem.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does `document.write()` behave the same way as `innerHTML` for this module's purposes?</div>
+  <p>Yes, for the same underlying reason: both parse a string into real DOM/markup, and CSP's script-src still only governs what happens when something in that markup TRIES to execute — not whether the parse/insertion itself is allowed to happen. The prerequisites page on DOM sinks groups them together for exactly this reason.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: If script-src-attr already blocks the DANGEROUS parts, why do we need Trusted Types at all — isn't Proof B just "content," not really an attack?</div>
+  <p>Real attacks often combine both: HTML structure that LOOKS legitimate (Proof B's category) that ALSO happens to include something executable somewhere CSP might not perfectly cover, or that redirects to a page that then does more damage in a second step. Trusted Types' value isn't "catches the one thing CSP misses" — it's "makes the entire class of unreviewed-string-reaches-a-sink bugs impossible by construction," which is a stronger, earlier guarantee than reactively blocking specific dangerous behaviors after the string is already in the DOM.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 15 adds exactly one new CSP directive —
+<code>require-trusted-types-for 'script'</code> — and shows, for real, the
+browser refusing Proof B's exact same non-executing payload at the moment
+of assignment, before it ever becomes DOM. That's the mechanism this whole
+module has been building toward.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../../track1-csp-core/13_form_action_base_uri/tutorial.html">← Module 13: form-action + base-uri (Track 1)</a></div>
+  <div class="next"><a href="../15_require_trusted_types_directive/tutorial.html">Module 15: require-trusted-types-for Directive →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 14 of 24 (1 of 11 in Track 2)</footer>
+</body>
+</html>
