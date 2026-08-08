@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 4 — Report-Only Mode</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js"></script>
+</head>
+<body>
+  <h1>Module 4 — Report-Only Mode</h1>
+  <p>This page is served with
+     <code>Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'</code>
+     — the exact same policy value as Module 3, but the <code>-Report-Only</code>
+     header name. Prediction: every proof below should behave like Module 1
+     (nothing blocked) while still logging violations like Module 3.</p>
+
+  <div class="proof">
+    <b>Proof A — inline script (predict: ALLOWED, but VIOLATION LOGGED)</b>
+    <p id="inline-proof" class="result">(inline script has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — remote script from a different origin, port 5600 (predict: ALLOWED, but VIOLATION LOGGED)</b>
+    <p id="remote-script-proof" class="result">(waiting for http://localhost:5600/attacker.js ...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — image from a different origin, port 5600 (predict: ALLOWED, but VIOLATION LOGGED)</b><br>
+    <img id="remote-img" class="pixel-box" src="http://localhost:5600/pixel.png" width="64" height="64">
+    <p id="img-proof" class="result">(waiting...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof D — <code>eval()</code>, auto-run on load (predict: ALLOWED, but VIOLATION LOGGED)</b><br>
+    <button id="eval-btn">Run eval('1 + 1') again</button>
+    <p id="eval-proof" class="result">(not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof E — same-origin external script (predict: ALLOWED, no violation — this one was never restricted)</b>
+    <p id="same-origin-proof" class="result">(waiting for /same-origin-proof.js ...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b> (same <code>securitypolicyviolation</code> event as Module 3 — does report-only still fire it?)
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof A: inline script. Predict this RUNS under report-only. -->
+  <script>
+    document.getElementById('inline-proof').textContent = 'ran — inline script executed';
+    document.getElementById('inline-proof').className = 'result allowed';
+  </script>
+
+  <!-- Proof B: cross-origin script. Predict this RUNS. -->
+  <script src="http://localhost:5600/attacker.js"></script>
+
+  <script src="/wiring.js"></script>
+  <script src="/same-origin-proof.js"></script>
+</body>
+</html>

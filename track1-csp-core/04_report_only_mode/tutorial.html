@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 4 — Report-Only Mode</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #d29922; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 4</span>Report-Only Mode</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#http-request-response">http-request-response</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Picture a fire-drill smoke detector installed a week before the real one:
+it still senses smoke, still sounds an alert to the building manager's
+office, still logs exactly which floor and which sensor tripped — but it
+doesn't trigger the sprinklers or lock the fire doors. You get to see, with
+real data from your actual building, what would have gone off and how
+often, before you ever risk soaking someone's desk over burnt toast.
+</p>
+<p>
+That's <code>Content-Security-Policy-Report-Only</code>. Same detection
+logic as the enforcing header, same events, same log — just the "sprinklers"
+(the actual blocking) disconnected.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends the identical policy string as Module 3, but under the header name <code>Content-Security-Policy-Report-Only</code> instead of <code>Content-Security-Policy</code>.</li>
+  <li>Browser parses the body. Every action that would have violated the enforcing policy (inline script, cross-origin script, cross-origin image, <code>eval</code>) is allowed to proceed normally.</li>
+  <li>For each of those same actions, the browser <em>also</em> fires a <code>securitypolicyviolation</code> DOM event — same shape as Module 3's — but this time with <code>event.disposition === "report"</code> instead of <code>"enforce"</code>.</li>
+  <li>Our violation log renders all four events with their disposition field visible, so you can see the "would have been blocked, wasn't" signal directly.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="12" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="160" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="13">Module 3: Content-Security-Policy</text>
+    <text x="25" y="70">action attempted</text>
+    <text x="25" y="90" fill="#f85149">→ BLOCKED</text>
+    <text x="25" y="110" fill="#f85149">→ event fires, disposition="enforce"</text>
+
+    <rect x="360" y="20" width="330" height="160" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="13">Module 4: ...-Report-Only</text>
+    <text x="375" y="70">action attempted</text>
+    <text x="375" y="90" fill="#3fb950">→ ALLOWED, proceeds normally</text>
+    <text x="375" y="110" fill="#3fb950">→ event STILL fires, disposition="report"</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The one-line difference that drives everything else — <a href="server.js">server.js</a>:</p>
+<pre><code>if (headerName) headers[headerName] = POLICY;
+// Module 3 called this with headerName: 'Content-Security-Policy'
+// Module 4 calls it with headerName: 'Content-Security-Policy-Report-Only'
+// POLICY itself never changes.</code></pre>
+<p>The new field we capture to prove the mode, not just the outcome — <a href="public/violation-listener.js">public/violation-listener.js</a>:</p>
+<pre><code>window.__cspViolations.push({
+  blockedURI: e.blockedURI,
+  violatedDirective: e.violatedDirective,
+  effectiveDirective: e.effectiveDirective,
+  disposition: e.disposition, // "enforce" or "report" — this module's key new field
+});</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Actually protect anything — report-only, by definition, blocks nothing</li>
+      <li>Send these violation reports to a server automatically (Module 10's Reporting API)</li>
+      <li>Run enforce and report-only policies side by side to compare a policy CHANGE (that's a real deployment pattern, out of scope here)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Test a new, stricter policy against real page behavior with zero risk of breaking anything</li>
+      <li>Distinguish "would this have been blocked" from "was this blocked" using one field, <code>disposition</code></li>
+      <li>Reuse literally the same policy string between enforce and report-only modes to isolate the variable</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/04_report_only_mode/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:5500</code>. Expected page state (real, captured):</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — ran — inline script executed
+Proof B — ran — cross-origin script executed
+Proof C — loaded — image displayed, 1x1 px
+Proof D — eval result: 2
+Proof E — ran — same-origin external script executed normally
+
+Live CSP violation log:
+#1 blockedURI=http://localhost:5600/pixel.png   disposition=report
+#2 blockedURI=inline                            disposition=report
+#3 blockedURI=http://localhost:5600/attacker.js disposition=report
+#4 blockedURI=eval                              disposition=report</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If every proof shows "ALLOWED" but the violation log stays empty, double
+  check the header name in your network tab — a typo like
+  <code>Content-Security-Policy-ReportOnly</code> (missing the second
+  hyphen) is silently ignored by browsers as an unrecognized header, which
+  looks identical to "no CSP at all" (Module 1) rather than report-only.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Could a real production team ship <code>Content-Security-Policy-Report-Only</code>
+by itself, forever, as their actual XSS defense, and skip the enforcing
+header entirely?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and this module's own data shows why. Every single proof that Module 3
+blocked, this module's identical policy allowed to run to completion. An
+attacker's injected script doesn't care that a report got logged somewhere;
+it already executed by the time the report fires. Report-Only is a
+<em>measurement</em> tool for finding out what a policy would break before
+you turn it on — it has zero protective effect on its own. The two headers
+are almost always meant to be a before/after pair in a rollout process, not
+alternatives.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Can I send both headers at once — enforce one policy and report-only-test another?</div>
+  <p>Yes, and it's a common real pattern: ship a strict policy as <code>Content-Security-Policy</code> for real protection, while simultaneously sending an even-stricter candidate policy as <code>Content-Security-Policy-Report-Only</code> to see what breaks before promoting it. The two headers are independent; violations get evaluated and reported against each one separately.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does the browser send these reports anywhere by default, or do I need to configure something?</div>
+  <p>Nothing is sent anywhere by default — the DOM event we captured here is purely client-side and only visible to script running on the page. To get reports delivered to a server (which is the more common real use of report-only mode, checking logs rather than watching a live page), you add a <code>report-to</code> directive naming an endpoint — that's Module 10.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why did we bother re-verifying that Proof E produces no violation, when Module 3 already showed 'self' scripts are allowed?</div>
+  <p>Module 3 proved <code>'self'</code> scripts are <em>allowed</em> under enforcement. This module needed to independently confirm they're <em>not incorrectly flagged</em> under report-only either — a report-only implementation that over-reported (flagged things that were never actually going to violate the policy) would be a real, plausible bug, and the only way to rule it out is to check, not assume symmetry.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Modules 5 and 6 return to enforcing mode, but solve a real problem
+Report-Only can't: how do you let <em>one specific</em> inline script run
+while still blocking every other inline script, instead of the all-or-
+nothing <code>'unsafe-inline'</code>/nothing choice you've had until now?
+Module 5 answers it with nonces.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../03_directive_enforcement/tutorial.html">← Module 3: Directive Enforcement</a></div>
+  <div class="next"><a href="../05_nonce_based_scripts/tutorial.html">Module 5: Nonce-Based Scripts →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 4 of 13</footer>
+</body>
+</html>
