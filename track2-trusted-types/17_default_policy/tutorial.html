@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 17 — The "default" Policy</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 17</span>The "default" Policy</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../16_policy_factory/tutorial.html">Module 16: Policy Factory</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Imagine a building that just installed a new mail-scanning checkpoint, but
+most of the mail room staff have no idea it exists — they keep dropping
+envelopes in the same old chute they always have. Rather than retraining
+every employee, the building installs ONE special chute, labeled
+<code>"default"</code>, that automatically routes anything dropped into
+ANY of the old, familiar chutes through the new scanner anyway — no
+retraining required, no employee needs to know the scanner was added. That
+one, specially-named chute is doing something no other named chute does:
+it catches traffic that was never addressed to it in the first place.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Page creates a policy with the EXACT name <code>"default"</code>, defining a <code>createHTML</code> rule that prepends a visible marker.</li>
+  <li>Separately, "legacy" code — code that never references <code>trustedTypes</code> or any policy at all — assigns a raw string directly to <code>innerHTML</code>.</li>
+  <li>Instead of throwing (Module 15's behavior), the assignment succeeds — and the rendered content shows the marker, proving the <code>"default"</code> policy's rule actually ran.</li>
+  <li>Separately, the same legacy code calls <code>eval('1+1')</code>. The <code>"default"</code> policy never defined a <code>createScript</code> rule — this still throws, identically to having no default policy at all.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">legacy code: el.innerHTML = "raw string"; (never touches trustedTypes)</text>
+
+    <rect x="10" y="40" width="330" height="60" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="62" text-anchor="middle" fill="#fff" font-size="11">/no-default</text>
+    <text x="20" y="85" fill="#f85149">THROWS</text>
+
+    <rect x="360" y="40" width="330" height="60" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="525" y="62" text-anchor="middle" fill="#fff" font-size="11">/with-default</text>
+    <text x="375" y="85" fill="#3fb950">SUCCEEDS — auto-routed through "default"</text>
+
+    <text x="10" y="140" fill="#fff">legacy code: eval('1+1');</text>
+    <rect x="10" y="150" width="680" height="40" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="175" fill="#f85149">THROWS on BOTH routes — "default" never defined createScript</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The one name that changes everything — <a href="server.js">server.js</a>:</p>
+<pre><code>trustedTypes.createPolicy('default', {
+  createHTML: (input) => '[DEFAULT POLICY SANITIZED]: ' + input,
+  // deliberately NOT defining createScript on this policy
+});
+
+// elsewhere, completely unmodified "legacy" code:
+document.getElementById('legacy-target').innerHTML = 'a raw string...';
+// ^ this line is IDENTICAL on both routes — what differs is only
+//   whether a policy named "default" happens to exist</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Assume `"default"` covers every sink type just because it exists — it only auto-covers what it actually implements</li>
+      <li>Have TWO policies both named `"default"` (untested here, but per spec this is exactly as restricted as any duplicate name — Module 20's territory)</li>
+      <li>Choose which specific legacy call sites get auto-routed — it's ALL of them, or none</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Adopt Trusted Types incrementally in a real, large, pre-existing codebase without rewriting every single sink assignment</li>
+      <li>Verify — not assume — that legacy code's raw strings really do get transformed by the named policy's real rule function</li>
+      <li>Correctly predict that any sink category the default policy doesn't implement stays exactly as locked-down as Module 15</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/17_default_policy/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Visit both routes at <code>http://localhost:7400</code>. Real captured results:</p>
+<div class="run-block">
+  <div class="run-label">verified</div>
+  <pre><code>/no-default:   THREW: TypeError: ... This document requires 'TrustedHTML' assignment.
+               eval THREW: EvalError: ...
+
+/with-default: [DEFAULT POLICY SANITIZED]: a raw string, written by code
+               with zero Trusted Types awareness
+               SUCCEEDED — legacy code's raw string was accepted
+               eval THREW: EvalError: ... (still — no createScript rule)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If `/with-default`'s legacy assignment still throws, double-check the
+  policy name is the EXACT string <code>"default"</code> — any other name,
+  including something like <code>"Default"</code> (capitalized) or
+  <code>"default-policy"</code>, is just an ordinary named policy from
+  Module 16 with no special auto-routing behavior at all.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A large team adopts Trusted Types by adding a permissive <code>"default"</code>
+policy whose <code>createHTML</code> rule just returns its input completely
+unchanged (no sanitization, no transformation at all) — purely to stop the
+`TypeError`s from breaking their existing app while they migrate call
+sites individually over time. Does this provide ANY real security benefit
+on day one?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+On its own, close to none — a `createHTML` rule that echoes its input
+verbatim re-creates exactly Module 14's original, unrestricted baseline for
+every legacy call site, just wrapped in an extra function call. The real
+value of this pattern is entirely about MIGRATION SEQUENCING, not immediate
+protection: it lets a team ship `require-trusted-types-for` without an
+instant, app-breaking outage, then progressively tighten the default
+policy's rule (add real sanitization) or migrate individual call sites to
+their OWN named policies with tighter, call-site-specific rules — shrinking
+what the permissive default has to cover over time. It's a legitimate,
+common real-world rollout strategy, but it's a staging step, not a
+finish line.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Can a page have both a `"default"` policy AND other named policies?</div>
+  <p>Yes — they're not mutually exclusive. Named policies (Module 16's pattern) are for code that deliberately opts in and calls `policy.createHTML(...)` explicitly; `"default"` is specifically for code that does neither. A real app commonly has both: tightly-scoped named policies for code that was deliberately migrated, and a `"default"` catching whatever wasn't yet.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does the default policy get invoked for values that ALREADY came from a different named policy?</div>
+  <p>No — this module didn't need to test that directly because it follows from Module 16's Proof C: a value that's already a real `TrustedHTML` object (produced by any policy) is already the type the sink wants. The default policy only ever gets consulted when the sink receives something that ISN'T already a Trusted Types object — i.e., a plain string.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is there a performance cost to having a "default" policy that most legacy code silently routes through?</div>
+  <p>Not tested or measured in this course, and not the point of this module — the interesting property here is correctness/coverage, not performance. A real production rollout would profile this like any other hot-path code, same as any function that runs on every legacy sink call.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 18 puts a real <code>createHTML</code>-backed policy in front of
+Module 14's exact two payloads — proving the guard actually accepts a
+policy-produced <code>TrustedHTML</code> value while still rejecting a raw
+string, in the module this whole arc has been building toward since
+Module 14.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../16_policy_factory/tutorial.html">← Module 16: Policy Factory</a></div>
+  <div class="next"><a href="../18_html_sink_guard/tutorial.html">Module 18: HTML Sink Guard →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 17 of 24 (4 of 11 in Track 2)</footer>
+</body>
+</html>
