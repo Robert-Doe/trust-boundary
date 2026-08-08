@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 6 — Hash-Based Scripts</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js"></script>
+</head>
+<body>
+  <h1>Module 6 — Hash-Based Scripts</h1>
+  <p>This response's policy is <code>script-src 'self' 'sha256-{{HASH}}'</code> —
+     a hash of one specific inline script's exact byte content. No server-side
+     randomness this time; the same content always hashes the same way.</p>
+
+  <div class="proof">
+    <b>Proof A — inline script whose content EXACTLY matches the hashed source (predict: ALLOWED)</b>
+    <p id="correct-hash-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — inline script that is one character different (a trailing space) from the hashed source (predict: BLOCKED)</b>
+    <p id="near-miss-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — is the hash the SAME on every request? (contrast with Module 5's nonce, which was DIFFERENT every time)</b>
+    <p id="determinism-proof" class="result">(checking — fetching this same URL twice...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <!-- Proof A: this <script> tag's ENTIRE text content must be byte-for-byte
+       identical to the ALLOWED_SCRIPT string server.js hashed — nothing
+       added, nothing removed, not even a listener setup line. That's why
+       the violation listener lives in its own external file instead. -->
+  <script>{{ALLOWED_SCRIPT}}</script>
+
+  <!-- Proof B: the SAME visible logic as Proof A, but with a deliberate
+       trailing space added after the final semicolon — enough to produce a
+       completely different SHA-256 hash. Hardcoded here, NOT run through
+       the server's hashing step, so it's guaranteed to mismatch. -->
+  <script>document.getElementById('near-miss-proof').textContent = 'ran (should NOT happen — this content was never hashed)'; document.getElementById('near-miss-proof').className = 'result allowed'; </script>
+
+  <script src="/wiring.js"></script>
+</body>
+</html>

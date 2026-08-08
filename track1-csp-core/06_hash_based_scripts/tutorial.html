@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 6 — Hash-Based Scripts</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #d2a8ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 6</span>Hash-Based Scripts</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../05_nonce_based_scripts/tutorial.html">Module 5: Nonce-Based Scripts</a>
+  <a class="tag-link" href="../../prerequisites/03_csp_vocabulary.html#source-expression">source-expression</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+A nonce (Module 5) was a wristband printed fresh at the door tonight. A hash
+is a completely different kind of proof: it's like a wax seal pressed
+directly into a letter's own content — melt the wax onto the exact words
+written, and anyone can verify later that the letter wasn't altered by
+re-melting a copy and comparing seals. Change even one word, and the new
+seal looks nothing like the old one. Nobody had to hand out the seal in
+advance, and nobody needs to remember it expired — the letter's own content
+IS the credential.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server defines <code>ALLOWED_SCRIPT</code>, one fixed JS string, and computes its SHA-256 hash once (deterministic — the same string always produces the same hash).</li>
+  <li>That hash goes into the CSP header as <code>'sha256-&lt;value&gt;'</code>, and the identical string is injected verbatim into the one <code>&lt;script&gt;</code> tag it belongs in.</li>
+  <li>Browser parses the body, reaches that script tag, hashes its actual content itself, and compares the result to the policy's allowlisted hash — match, so it runs.</li>
+  <li>Browser reaches a second inline script whose content looks almost identical but has one extra trailing space. Its hash comes out completely different (SHA-256 has no "close enough") — no match, blocked.</li>
+  <li>A same-origin external script re-fetches the page twice and compares the hash each response's header carries — confirms it's identical both times, unlike Module 5's nonce.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff" font-size="13">script-src 'self' 'sha256-LFyfbULqKlvr...'</text>
+
+    <rect x="10" y="40" width="330" height="60" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="60">Proof A content, hashed →</text>
+    <text x="20" y="78" font-size="11">LFyfbULqKlvrys9c6HmEDiSiYGHye8Gsd44zW39iVgQ=</text>
+    <text x="20" y="94" fill="#3fb950">MATCHES → ALLOWED</text>
+
+    <rect x="360" y="40" width="330" height="60" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="370" y="60">Proof B content (1 space more), hashed →</text>
+    <text x="370" y="78" font-size="11">(completely different 44-char value)</text>
+    <text x="370" y="94" fill="#f85149">NO MATCH → BLOCKED</text>
+
+    <text x="10" y="140" fill="#8b949e">Request 1 hash: LFyfbULqKlvrys9c6HmEDiSiYGHye8Gsd44zW39iVgQ=</text>
+    <text x="10" y="160" fill="#8b949e">Request 2 hash: LFyfbULqKlvrys9c6HmEDiSiYGHye8Gsd44zW39iVgQ= ← SAME, verified live</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>One string, hashed once, injected verbatim — <a href="server.js">server.js</a>:</p>
+<pre><code>const ALLOWED_SCRIPT =
+  "document.getElementById('correct-hash-proof').textContent = '...'; ...";
+const hash = crypto.createHash('sha256').update(ALLOWED_SCRIPT, 'utf8').digest('base64');
+// ...
+const html = template.replaceAll('{{ALLOWED_SCRIPT}}', ALLOWED_SCRIPT);
+const policy = `script-src 'self' 'sha256-${hash}'`;</code></pre>
+<p>The bug we caught before ever running this module — <a href="public/index.html">public/index.html</a>, the fixed version:</p>
+<pre><code>&lt;!-- Proof A: this &lt;script&gt; tag's ENTIRE text content must be byte-for-byte
+     identical to the ALLOWED_SCRIPT string server.js hashed — nothing
+     added, nothing removed, not even a listener setup line. --&gt;
+&lt;script&gt;{{ALLOWED_SCRIPT}}&lt;/script&gt;</code></pre>
+<p>Full story of that near-miss in <a href="DECISIONS.md">DECISIONS.md</a> — it's a real mistake this course made and fixed, not a hypothetical.</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Allowlist a whole family of dynamically-inserted scripts from one trusted root (Module 7)</li>
+      <li>Hash-allowlist something that changes per response — that's what nonces are for</li>
+      <li>Tolerate even whitespace-only edits without regenerating the hash</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Allowlist a fixed inline script with zero server-side randomness or state</li>
+      <li>Guarantee the same content always produces the same allowlist entry, verified across requests</li>
+      <li>Catch a content/hash mismatch as a hard block instead of a silent security hole</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/06_hash_based_scripts/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:5800</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — ran — this exact byte content was hashed and allowlisted
+Proof B — (has not run yet)
+Proof C — SAME hash both times: LFyfbULqKlvrys9c6HmEDiSiYGHye8Gsd44zW39iVgQ=
+
+Live CSP violation log:
+#1 blockedURI=inline  violatedDirective=script-src-elem</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof A shows blocked, the most likely cause is exactly the bug this
+  module's DECISIONS.md documents catching: something got added to that
+  script tag's content besides <code>ALLOWED_SCRIPT</code> itself — check
+  <code>public/index.html</code> for anything sitting inside that specific
+  <code>&lt;script&gt;</code> tag beyond the single template placeholder.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A teammate suggests: "Hashes seem strictly better than nonces — no
+server-side randomness needed, no per-request state to manage. Let's just
+hash-allowlist everything and drop nonces entirely." What inline-script
+use case would break under that plan?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Any inline script whose content legitimately changes per response — for
+example, one that embeds a CSRF token, a per-user greeting, or any
+server-rendered dynamic value directly in its source. A hash is tied to
+exact bytes; if the content is different every time by design, you'd need a
+different hash every time too, which means recomputing and re-sending a
+changing CSP header per response anyway — at which point you've reinvented
+a nonce, just clumsily, with extra hashing overhead and no actual benefit.
+Hashes suit content that's fixed at deploy time; nonces suit content that's
+generated at request time. Neither replaces the other.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does whitespace INSIDE the `<script>` tags but outside the actual code (like a leading newline from indentation) count toward the hash?</div>
+  <p>Yes — the hash covers the element's full text content, character for character, which is exactly the bug this module's DECISIONS.md walks through catching. A `<script>` tag indented in a template, with a newline and leading spaces before the real code starts, hashes completely differently than the same code with no surrounding whitespace.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Can I hash-allowlist an external script file, not just inline content?</div>
+  <p>Not the way this module does it — `'sha256-...'` as a bare source expression governs inline content. External scripts have a separate, related mechanism (Subresource Integrity, `integrity="sha384-..."` on the `<script>` tag) that's a different spec entirely, outside this course's scope.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: If I have five different fixed inline scripts on one page, do I need five different hash sources?</div>
+  <p>Yes — each hash allowlists exactly one exact content string. Five distinct scripts need five `'sha256-...'` entries in the same `script-src` directive (space-separated, like any other source list), or you'd combine several into one script tag so there's only one thing to hash.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 7 introduces <code>'strict-dynamic'</code> — a keyword that changes
+the rules again: a script trusted by nonce or hash can, under
+<code>'strict-dynamic'</code>, load further scripts dynamically without each
+one needing its own nonce or hash. You'll see exactly which of today's
+allowlisting mechanics that keyword builds on top of.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../05_nonce_based_scripts/tutorial.html">← Module 5: Nonce-Based Scripts</a></div>
+  <div class="next"><a href="../07_strict_dynamic/tutorial.html">Module 7: strict-dynamic Propagation →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 6 of 13</footer>
+</body>
+</html>
