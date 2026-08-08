@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 10 — Violation Reporting API</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Module 10 — Violation Reporting API</h1>
+  <p>Policy: <code>default-src 'self'; script-src 'self'; report-uri /csp-report; report-to csp-endpoint</code></p>
+  <p>Plus a <code>Reporting-Endpoints: csp-endpoint="http://localhost:6500/csp-report"</code> header.</p>
+  <p>Two intentional violations below trigger both DOM events AND (if the
+     browser supports them) real network reports POSTed to our own
+     collector server.</p>
+
+  <div class="proof">
+    <b>Trigger 1 — inline script (blocked, produces a violation)</b>
+    <p id="inline-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Trigger 2 — eval (blocked, produces a second violation)</b>
+    <p id="eval-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>ReportingObserver — did the browser generate a report object AT ALL, independent of network delivery?</b>
+    <div id="observer-log" class="result">(waiting...)</div>
+  </div>
+
+  <div class="proof">
+    <b>Server-side collector — what actually arrived at <code>/csp-report</code>, polled from <code>/debug/reports</code></b>
+    <div id="collector-log" class="result">(polling...)</div>
+  </div>
+
+  <!-- Trigger 1: inline, blocked. -->
+  <script>
+    document.getElementById('inline-proof').textContent = 'ran (should NOT happen)';
+  </script>
+
+  <script src="/wiring.js"></script>
+</body>
+</html>

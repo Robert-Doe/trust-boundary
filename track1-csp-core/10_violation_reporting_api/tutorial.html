@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 10 — Violation Reporting API</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #a5a5ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 10</span>Violation Reporting API</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#http-request-response">http-request-response</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+A ship's black-box flight/voyage recorder captures a detailed, accurate log
+of every incident the instant it happens — that part is immediate and
+reliable, by design. Whether that recorder's data ever reaches an
+investigator, though, depends on a completely separate process: someone has
+to physically recover the box, or it has to successfully transmit over a
+connection that might not even be available yet. This module is about
+discovering, directly, which of those two very different guarantees CSP's
+reporting actually gives you — and it turned out to matter enormously
+which one we were checking.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server sends a policy with both a legacy <code>report-uri /csp-report</code> directive and a modern <code>report-to csp-endpoint</code> directive, plus a <code>Reporting-Endpoints</code> header naming that group's real URL.</li>
+  <li>Two deliberate violations occur (inline script, <code>eval</code>).</li>
+  <li>A page-level <code>ReportingObserver</code> immediately captures full, detailed report objects for both violations — this happens synchronously, reliably, with zero network involvement.</li>
+  <li>We poll our own collector server's <code>/debug/reports</code> endpoint for several seconds. Nothing arrives.</li>
+  <li>We wait longer, then force a navigation away (in case delivery happens on unload), then check the collector server's raw log directly. Still nothing arrived, by either mechanism.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="180" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="175" y="45" text-anchor="middle" fill="#fff" font-size="13">Report GENERATION</text>
+    <text x="25" y="75">ReportingObserver</text>
+    <text x="25" y="95" fill="#3fb950">2/2 reports captured</text>
+    <text x="25" y="115">full body: sourceFile,</text>
+    <text x="25" y="130">lineNumber, blockedURL,</text>
+    <text x="25" y="145">effectiveDirective, ...</text>
+    <text x="25" y="170" fill="#3fb950">RELIABLE, IMMEDIATE</text>
+
+    <rect x="360" y="20" width="330" height="180" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="525" y="45" text-anchor="middle" fill="#fff" font-size="13">Report DELIVERY</text>
+    <text x="375" y="75">/csp-report collector</text>
+    <text x="375" y="95" fill="#f85149">0 requests received</text>
+    <text x="375" y="115">(checked: 6s poll, +20s wait,</text>
+    <text x="375" y="130">forced navigation, raw server log)</text>
+    <text x="375" y="170" fill="#f85149">NOT OBSERVED, THIS ENV</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Testing both mechanisms without assuming either works — <a href="server.js">server.js</a>:</p>
+<pre><code>const POLICY = "default-src 'self'; script-src 'self'; report-uri /csp-report; report-to csp-endpoint";
+const REPORTING_ENDPOINTS = 'csp-endpoint="http://localhost:6500/csp-report"';</code></pre>
+<p>The tool that isolated generation from delivery — <a href="public/wiring.js">public/wiring.js</a>:</p>
+<pre><code>const observer = new ReportingObserver((reports) => {
+  reports.forEach((r) => observed.push({ type: r.type, url: r.url, body: r.body }));
+}, { buffered: true });
+observer.observe();</code></pre>
+<p>Full investigation trail — including why we didn't stop at the first null result — in <a href="DECISIONS.md">DECISIONS.md</a>.</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Assume a collector endpoint receiving nothing means no violations occurred</li>
+      <li>Use a live collector as a real-time development debugging tool</li>
+      <li>Rely on any specific delivery timing — the spec explicitly doesn't guarantee one</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Get an immediate, complete, reliable local signal via `ReportingObserver` — no network or server required at all</li>
+      <li>Build a real server-side collector endpoint that will log whatever DOES eventually arrive, in production, at scale, over time</li>
+      <li>Correctly distinguish "the browser detected this violation" from "a server received a report about it" as two different claims</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/10_violation_reporting_api/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:6500</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Trigger 1 — (has not run yet)
+Trigger 2 — BLOCKED: EvalError
+
+ReportingObserver saw 2 report(s):
+[ { "type": "csp-violation", "body": { "blockedURL": "inline", ... } },
+  { "type": "csp-violation", "body": { "blockedURL": "eval", ... } } ]
+
+Server-side collector: (tick 6: still 0 reports received server-side)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a different result on your machine?</span>
+  If your collector DOES receive reports where ours didn't, that's genuinely
+  interesting, not a sign something's broken — it would mean your browser's
+  network-reporting behavior differs from the environment this course
+  verified in (real Chrome, outside an automated test harness, seems the
+  most likely candidate to behave differently). Either outcome is consistent
+  with the spec, which is precisely this module's point: don't build
+  anything that assumes a specific delivery timing.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A teammate says: "I added <code>report-to</code> to our CSP header last
+week and our collector dashboard still shows zero events — the feature must
+be broken." Given everything this module verified, what's a more likely
+explanation, and how would you actually check?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+The feature working and reports being delivered promptly are two different
+claims, and this module showed real reports get generated and can go
+completely undelivered, at least for a while, with no error surfaced
+anywhere. Before concluding "broken," check the two halves separately: (1)
+does `new ReportingObserver(cb, {buffered:true}).observe()` on the live page
+show real report objects when you trigger a known violation? If yes,
+generation works fine, and the question becomes purely about the network
+path — a firewall, an ad-blocker (browsers' own "Failed to load resource"
+noise in this module's own console log — from an ad-blocker-style
+extension — is a hint this can be blocked client-side too), a misconfigured
+endpoint URL, or simply the browser's own upload timer not having fired
+yet. Checking "does my collector have anything" alone can't distinguish
+"broken" from "not delivered yet" from "actively blocked" — you need the
+generation-side signal too.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why keep BOTH `report-uri` and `report-to` in a real production policy, if `report-uri` is legacy?</div>
+  <p>Browser support gap coverage: older browsers only understand `report-uri`; newer ones prefer `report-to`/`Reporting-Endpoints`. Declaring both costs nothing (unrecognized directives are just ignored) and maximizes the chance SOME mechanism delivers on SOME visitor's browser.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is it suspicious that we saw `net::ERR_BLOCKED_BY_CLIENT` messages in the console during this module?</div>
+  <p>Those appeared in every module in this course from the very first one — they're this specific browser environment's own extension-level noise (consistent with an ad-blocker-style filter), unrelated to CSP. We call this out explicitly here because "reports aren't arriving" plus "BLOCKED_BY_CLIENT in the console" is exactly the pattern that would mislead someone into blaming an ad-blocker for this module's real, independently-confirmed finding (zero delivery even after ruling out timing).</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does `disposition: "enforce"` in the ReportingObserver output mean the same thing as Module 4's `event.disposition`?</div>
+  <p>Yes — same concept, same two possible values (`"enforce"`/`"report"`), just visible through a different API. `ReportingObserver` and the DOM `securitypolicyviolation` event are two independent ways of observing the same underlying violation; nothing about report generation is exclusive to one or the other.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 11 is the capstone of Track 1's core-mechanics arc: a real, working
+reflected-XSS vulnerability, first exploited against Module 1's baseline,
+then blocked by a real policy built from what Modules 2–10 taught — the
+before/after this whole track has been building toward.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../09_meta_vs_header/tutorial.html">← Module 9: Meta Tag vs. Header</a></div>
+  <div class="next"><a href="../11_csp_blocks_reflected_xss/tutorial.html">Module 11: CSP Blocks Reflected XSS →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 10 of 13</footer>
+</body>
+</html>
