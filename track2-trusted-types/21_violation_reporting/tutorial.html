@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 21 — Trusted Types Violation Reporting</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 21</span>Trusted Types Violation Reporting</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../track1-csp-core/10_violation_reporting_api/tutorial.html">Module 10: Violation Reporting API</a>
+  <a class="tag-link" href="../20_policy_name_allowlist/tutorial.html">Module 20: Policy-Name Allowlist</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Module 10 built one black-box flight recorder for the whole aircraft. This
+module checks whether a completely different kind of incident — not "wrong
+heading" (a CSP script-src block) but "unauthorized crew member tried to
+enter the cockpit" (a blocked Trusted Types sink assignment or policy
+creation) — gets logged by that SAME recorder, or whether it needs its own
+separate black box nobody remembered to install. Good news, verified
+directly: one recorder, every incident type, no separate system required.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A page wires up both reporting channels Module 10 verified: a `securitypolicyviolation` DOM listener and a `ReportingObserver`.</li>
+  <li>Trigger 1: a raw string is assigned to `innerHTML` with no policy covering it — throws a `TypeError`, exactly like Module 15.</li>
+  <li>Trigger 2: `createPolicy('rogue-policy', ...)` is attempted with a disallowed name — throws a `TypeError`, exactly like Module 20.</li>
+  <li>BOTH triggers, independently, ALSO produce a real `securitypolicyviolation` event and a real `ReportingObserver` report — the thrown exception and the reporting signal are two separate, both-real things happening together.</li>
+  <li>The two triggers produce different `blockedURI` values — `"trusted-types-sink"` vs. `"trusted-types-policy"` — making them distinguishable in a report stream.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="150" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="12">Trigger 1: sink assignment</text>
+    <text x="25" y="65">throws: TypeError (TrustedHTML)</text>
+    <text x="25" y="90" fill="#3fb950">DOM event: blockedURI=</text>
+    <text x="25" y="108" fill="#3fb950">  "trusted-types-sink"</text>
+    <text x="25" y="130" fill="#3fb950">ReportingObserver: full report</text>
+
+    <rect x="360" y="20" width="330" height="150" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="12">Trigger 2: policy creation</text>
+    <text x="375" y="65">throws: TypeError (disallowed)</text>
+    <text x="375" y="90" fill="#3fb950">DOM event: blockedURI=</text>
+    <text x="375" y="108" fill="#3fb950">  "trusted-types-policy"</text>
+    <text x="375" y="130" fill="#3fb950">ReportingObserver: full report</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>Reusing both channels from Module 10, unchanged — <a href="server.js">server.js</a>:</p>
+<pre><code>document.addEventListener('securitypolicyviolation', (e) => {
+  domEvents.push({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, sample: e.sample });
+});
+const ro = new ReportingObserver((reports) => { /* ... */ }, { buffered: true });
+ro.observe();</code></pre>
+<p>The two real, distinguishing field values, captured — not guessed:</p>
+<pre><code>Trigger 1: blockedURI="trusted-types-sink"    violatedDirective="require-trusted-types-for"
+Trigger 2: blockedURI="trusted-types-policy"  violatedDirective="trusted-types"</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Guarantee network DELIVERY of these reports to a server — Module 10's same caveat applies identically here</li>
+      <li>Get a report for a sink assignment that SUCCEEDED via a valid policy — only failures are reported, same as ordinary CSP</li>
+      <li>Distinguish which SPECIFIC line of application code triggered a report without also reading `sourceFile`/`lineNumber` from the full report body</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Monitor Trusted Types adoption in production using the exact same infrastructure already built for CSP violations</li>
+      <li>Distinguish sink-assignment failures from policy-creation failures using `blockedURI`/`effectiveDirective` alone</li>
+      <li>Get an immediate, reliable LOCAL signal via `ReportingObserver`, independent of network delivery timing</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/21_violation_reporting/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7800</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified, abbreviated)</div>
+  <pre><code>DOM event log:
+[
+  { "blockedURI": "trusted-types-sink", "violatedDirective": "require-trusted-types-for",
+    "sample": "Element innerHTML|a raw string, no policy" },
+  { "blockedURI": "trusted-types-policy", "violatedDirective": "trusted-types",
+    "sample": "rogue-policy" }
+]
+
+Trigger 1 — THREW (as expected): TypeError: ... This document requires 'TrustedHTML' assignment.
+Trigger 2 — THREW (as expected): TypeError: ... Policy "rogue-policy" disallowed.</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If the DOM event log stays empty, check that the listener is registered
+  BEFORE the triggers run (same ordering lesson as Track 1 Module 3) —
+  this module's script registers the listener first specifically to avoid
+  that gotcha.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A team already has a CSP violation dashboard built from Module 10's
+patterns. They adopt `require-trusted-types-for` and `trusted-types` for
+the first time. Do they need to build any new reporting infrastructure to
+start seeing Trusted Types failures on that same dashboard?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and that's this module's whole finding, verified rather than assumed.
+Trusted Types violations flow through the identical
+`securitypolicyviolation`/Reporting API pipeline as ordinary CSP
+violations. Any existing collector endpoint, `ReportingObserver` hookup, or
+dashboard built for Track 1's violations will start receiving Trusted
+Types violations automatically the moment the new directives are added —
+distinguishable from other violation types by `blockedURI`/
+`effectiveDirective`, but requiring zero new plumbing to arrive at all.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Does the `sample` field behave the same way it did in Track 1?</div>
+  <p>Yes and no — same field, richer content. Track 1's Module 5 found `sample` empty by default (requires `'report-sample'`). Here, both triggers show real, non-empty sample text — for the sink trigger, `"Element innerHTML|a raw string, no policy"` (identifying the sink AND showing the actual value); for the policy trigger, the attempted policy name itself, `"rogue-policy"`. Worth independently verifying whether `'report-sample'` was needed for these specific Trusted Types report types, or whether they include more detail by default — this module didn't test that distinction directly.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Would a successful, policy-authorized sink assignment ALSO generate a report, just a "success" one?</div>
+  <p>No — same as every other violation-reporting mechanism this course has covered, only FAILURES generate reports. A successful `policy.createHTML(...)` call followed by an accepted `innerHTML` assignment produces no event, no report, nothing — reporting exists to surface problems, not to log routine, correct usage.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is `effectiveDirective: "trusted-types"` a real CSP directive name, same as `script-src`?</div>
+  <p>Yes — `trusted-types` (Module 20) and `require-trusted-types-for` (Module 15) are both genuine CSP directive names, which is exactly why their violations fit naturally into CSP's existing violation-reporting shape: from the reporting pipeline's perspective, a Trusted Types failure is just a violation of a CSP directive like any other, even though the underlying JS-level enforcement mechanism (throwing `TypeError`s from sink setters) is quite different from a blocked network request.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Phase 3 is complete. Phase 4 — "Trusted Types Meets Prototypes" — begins
+now: Module 22 opens up the EXACT mechanism the browser uses to recognize
+a real <code>TrustedHTML</code> value, and it connects directly back to
+the prerequisites layer's JS prototype chain page.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../20_policy_name_allowlist/tutorial.html">← Module 20: Policy-Name Allowlist</a></div>
+  <div class="next"><a href="../22_brand_check_instanceof/tutorial.html">Module 22: Brand Check via instanceof →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 21 of 24 (8 of 11 in Track 2) — Phase 3 complete</footer>
+</body>
+</html>
