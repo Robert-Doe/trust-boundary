@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 15 — require-trusted-types-for Directive</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #db61a2; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 3 · Module 15</span>require-trusted-types-for Directive</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../14_dom_xss_sink_baseline/tutorial.html">Module 14: DOM-XSS Sink Baseline</a>
+  <a class="tag-link" href="../../track1-csp-core/03_directive_enforcement/tutorial.html">Module 3: Directive Enforcement</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Module 14's door had no checkpoint at all — anything walked through,
+unexamined. This module installs a checkpoint, but with an empty
+allowlist and no guard on duty to make exceptions: <em>everyone</em> gets
+turned away, the harmless delivery driver exactly as thoroughly as the
+person carrying something dangerous. That's not a useful final state — but
+it's the necessary first step, and it's the moment you can finally SEE the
+checkpoint exists at all, because now even completely innocent traffic
+bounces off it.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Server adds exactly one new thing to the policy: <code>require-trusted-types-for 'script'</code>. No policy is created anywhere with <code>trustedTypes.createPolicy()</code>.</li>
+  <li>Page script attempts <code>target_a.innerHTML = '&lt;img onerror=...&gt;'</code> — same dangerous payload as Module 14's Proof A.</li>
+  <li>The assignment throws immediately: <code>TypeError: ... This document requires 'TrustedHTML' assignment.</code> The string is a plain JS string, not a <code>TrustedHTML</code> object — the browser refuses it before even looking at what's inside.</li>
+  <li>Page script attempts the exact same assignment with Module 14's Proof B — the completely harmless banner.</li>
+  <li>Identical error, identical message. The browser can't tell them apart, because it never got far enough to try.</li>
+  <li><code>eval('1+1')</code> is attempted, with <code>'unsafe-eval'</code> present in <code>script-src</code> (ruling out Track 1's separate mechanism) — throws a distinctly different Trusted-Types-specific error.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 180" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">require-trusted-types-for 'script' — zero policies defined</text>
+
+    <rect x="10" y="40" width="330" height="90" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="175" y="62" text-anchor="middle" fill="#fff" font-size="12">Proof A: dangerous payload</text>
+    <text x="25" y="85" fill="#f85149">TypeError: This document</text>
+    <text x="25" y="103" fill="#f85149">requires 'TrustedHTML' assignment.</text>
+
+    <rect x="360" y="40" width="330" height="90" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="525" y="62" text-anchor="middle" fill="#fff" font-size="12">Proof B: harmless payload</text>
+    <text x="375" y="85" fill="#f85149">TypeError: This document</text>
+    <text x="375" y="103" fill="#f85149">requires 'TrustedHTML' assignment.</text>
+
+    <text x="175" y="150" text-anchor="middle" fill="#e3b341">↑ IDENTICAL error, both proofs — the browser never looked inside either string</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The one directive that changes everything — <a href="server.js">server.js</a>:</p>
+<pre><code>const policy = \`script-src 'self' 'nonce-${'${nonce}'}' 'unsafe-eval'; require-trusted-types-for 'script'\`;</code></pre>
+<p>Both proofs, same call shape as Module 14, now both throwing — <a href="server.js">server.js</a>:</p>
+<pre><code>try {
+  document.getElementById(id).innerHTML = html;
+  // ... success path, unreachable for BOTH payloads now
+} catch (e) {
+  el.textContent = 'THREW: ' + e.constructor.name + ': ' + e.message;
+}</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Use `innerHTML` (or `eval`, or `script.src`) for ANYTHING — every guarded sink is now unconditionally broken</li>
+      <li>Distinguish safe from unsafe content — nothing is allowed through at all yet</li>
+      <li>Ship this to production as-is — a real app would break entirely</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Observe, with real error text, that Trusted Types enforcement is a real, active, categorical block — not a no-op</li>
+      <li>Confirm one CSP keyword governs BOTH HTML-type and Script-type sinks at once</li>
+      <li>Correctly predict Module 16's next necessary step: SOMETHING has to authorize sink assignments, or nothing on the page can use them</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/15_require_trusted_types_directive/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:7200</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified)</div>
+  <pre><code>Proof A — THREW: TypeError: Failed to set the 'innerHTML' property on
+          'Element': This document requires 'TrustedHTML' assignment.
+Proof B — THREW: TypeError: Failed to set the 'innerHTML' property on
+          'Element': This document requires 'TrustedHTML' assignment.
+          (identical to Proof A)
+Proof C — THREW: EvalError: Evaluating a string as JavaScript violates
+          this document's Trusted Type assignment requirements.</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof C succeeds where A and B are blocked, double-check
+  `'unsafe-eval'` is really present in your `script-src` — without it, a
+  successful block on `eval` would be ambiguous between Track 1's plain CSP
+  mechanism and Trusted Types, which defeats this proof's whole purpose.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+Proof A and Proof B produced byte-for-byte identical error messages. What
+does that identical wording tell you about WHEN, in the assignment process,
+the browser decided to block each one?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+It tells you the block happens before the browser has formed any opinion
+about the string's content at all — if it had inspected either string even
+briefly (looking for `&lt;script&gt;` tags, or handlers, or anything
+"suspicious"), you'd expect at least a chance of different error details
+between a payload containing a handler and one that doesn't. Identical
+errors mean the check that failed is purely about the VALUE'S TYPE — "is
+this a `TrustedHTML` object?" — answered the same way, immediately, for
+any plain JS string, dangerous-looking or not. This is the mechanistic
+core of Trusted Types: it's a type check at the API boundary, not a content
+scanner.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why is the directive's value just `'script'` — not `'html'` or `'script-url'` for the different sink categories?</div>
+  <p>Because the spec defines exactly one value for this directive, and it turns on enforcement for every Trusted-Types-guarded sink category at once — HTML sinks (`innerHTML` etc.), Script sinks (`eval`, `Function`, inline event handler strings set via `.setAttribute`), and ScriptURL sinks (`script.src`) all become guarded together. There's no way to enable it for only one category.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Is `TypeError` the right error class here, or should it be something CSP-specific like the `EvalError` we saw in Track 1?</div>
+  <p>Both appear, depending on the sink: HTML-type sinks throw a plain `TypeError` (a type-mismatch is exactly what happened — the sink demanded a `TrustedHTML` and got a string). `eval` throws `EvalError` specifically because that's the error class JS itself defines for problems with `eval`. Different sinks, different native error types, same underlying cause.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could a real site ship with `require-trusted-types-for 'script'` and no policies, on purpose?</div>
+  <p>Only as an intentional, extreme lockdown of a page/feature that should never use these sinks at all — any attempt (legitimate or malicious) simply fails. That's a real, valid use case for something like a purely static content page, but it's not the general-purpose story; Module 16 is what makes the mechanism usable for a normal application.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 16 introduces <code>trustedTypes.createPolicy()</code> — the
+factory object that finally lets legitimate code produce values these
+sinks WILL accept, without reopening the hole Module 14 exposed.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../14_dom_xss_sink_baseline/tutorial.html">← Module 14: DOM-XSS Sink Baseline</a></div>
+  <div class="next"><a href="../16_policy_factory/tutorial.html">Module 16: Policy Factory →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 15 of 24 (2 of 11 in Track 2)</footer>
+</body>
+</html>
