@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 24 — Real-World Sanitizer Capstone</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #7ee787; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 2 · Phase 4 · Module 24 — Capstone</span>Real-World Sanitizer Capstone</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../18_html_sink_guard/tutorial.html">Module 18: HTML Sink Guard</a>
+  <a class="tag-link" href="../19_script_sink_guard/tutorial.html">Module 19: Script Sink Guard</a>
+  <a class="tag-link" href="../23_forged_object_defense/tutorial.html">Module 23: Forged-Object Defense</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+Every module before this one built and tested one piece of the checkpoint
+system in isolation — the badge format, the ID scanner, the forgery
+detector. This module opens the doors for a real day of traffic: a real
+security guard (DOMPurify, an actual, independently-maintained library,
+not a toy we wrote), checking a real stream of visitors that includes
+known troublemakers in eight different disguises, alongside ordinary
+legitimate guests carrying perfectly normal luggage (real rich-text
+content). The measure of success isn't "did the checkpoint exist" — it's
+"did every troublemaker get stopped, and did every legitimate guest get
+through unbothered."
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>A real, unmodified DOMPurify 3.4.13 build (vendored via npm, not a CDN) loads as a same-origin script.</li>
+  <li>A policy named <code>dompurify-policy</code> is created, whose <code>createHTML</code> rule calls <code>DOMPurify.sanitize()</code> on its input and returns the result.</li>
+  <li>Eight real XSS payload shapes — a script tag, an <code>onerror</code> handler, an <code>onload</code> handler, a <code>javascript:</code> URL in an anchor, one in an iframe, a <code>&lt;body onload&gt;</code> fragment, a CSS <code>url(javascript:...)</code>, and an attribute-breakout attempt — are each run through <code>policy.createHTML()</code> and assigned to <code>innerHTML</code>.</li>
+  <li>A global marker, set only if any payload's embedded code actually runs, is checked after all eight: it stayed <code>false</code>.</li>
+  <li>Separately, real legitimate rich-text HTML (bold, italic, a real link, a list) is run through the exact same policy — and comes out byte-for-byte identical to what went in.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="#c9d1d9">
+    <text x="10" y="18" fill="#fff" font-size="12">8 real payloads → policy.createHTML() → DOMPurify.sanitize() → innerHTML</text>
+
+    <rect x="10" y="30" width="330" height="90" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="48">script/img/svg/iframe/body payloads</text>
+    <text x="20" y="66" fill="#3fb950">dangerous parts STRIPPED</text>
+    <text x="20" y="84">structure/text preserved where safe</text>
+    <text x="20" y="102" fill="#3fb950">0/8 executed</text>
+
+    <rect x="360" y="30" width="330" height="90" rx="6" fill="#161b22" stroke="#e3b341"/>
+    <text x="370" y="48">CSS url(javascript:...)</text>
+    <text x="370" y="66" fill="#e3b341">passed through UNCHANGED</text>
+    <text x="370" y="84">harmless: browsers no longer</text>
+    <text x="370" y="102">execute this vector at all</text>
+
+    <rect x="10" y="135" width="680" height="70" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="155">legitimate rich text: bold, italic, real link, list</text>
+    <text x="20" y="180" fill="#3fb950">sanitized output === original input, byte for byte</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The one policy backing every proof — <a href="server.js">server.js</a>:</p>
+<pre><code>const policy = trustedTypes.createPolicy('dompurify-policy', {
+  createHTML: (input) => DOMPurify.sanitize(input, { RETURN_TRUSTED_TYPE: false }),
+});</code></pre>
+<p>The CSP line that took two real bugs to get right:</p>
+<pre><code>trusted-types dompurify dompurify-policy
+// ^ "dompurify" (DOMPurify's OWN internal policy name) had to be added
+//   too — discovered only by running this module and reading the console</code></pre>
+<p>Full account of both real integration bugs — DOMPurify's internal policy name, and our own UI code tripping the same guard it was testing — in <a href="DECISIONS.md">DECISIONS.md</a>.</p>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Claim DOMPurify neutralizes every conceivable payload shape — this corpus is eight real examples, not an exhaustive security audit</li>
+      <li>Assume a sanitizer is defending a vector that's actually just obsolete in modern browsers (the CSS payload's real lesson)</li>
+      <li>Skip the `require-trusted-types-for` awareness even in your OWN trusted UI-building code — it guards everything, no exceptions</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Ship the complete, real pattern: a real sanitizer, wrapped in an explicit, named, auditable Trusted Types policy</li>
+      <li>Verify — not assume — that legitimate content survives sanitization unchanged</li>
+      <li>Correctly integrate a real third-party library's own internal Trusted Types usage alongside your own policy</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track2-trusted-types/24_sanitizer_capstone/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:8300</code>. Real captured result:</p>
+<div class="run-block">
+  <div class="run-label">page text (verified, abbreviated)</div>
+  <pre><code>script tag              → (empty)
+img onerror             → &lt;img src="x"&gt;
+svg onload              → &lt;svg&gt;&lt;/svg&gt;
+anchor javascript: URL  → &lt;a&gt;click me&lt;/a&gt;
+iframe javascript: URL  → (empty)
+body onload fragment    → text
+CSS javascript: URL     → UNCHANGED (harmless — obsolete vector)
+encoded re-injection    → "&amp;gt;
+
+window.__xssFired: false — none executed (success)
+Sanitized output === original (formatting fully preserved): true</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If the corpus table never appears at all, check the console for
+  <code>"This document requires 'TrustedHTML' assignment"</code> thrown
+  from YOUR OWN code, not the payloads — the most likely cause is a
+  results-rendering line that assigns a plain string to <code>innerHTML</code>
+  directly instead of going through <code>createElement</code>/
+  <code>textContent</code>, exactly the bug this module's own first draft
+  hit (see DECISIONS.md).
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+This module found that DOMPurify left the CSS <code>url(javascript:...)</code>
+payload completely unchanged, yet the overall result was still "0/8
+executed." A teammate argues: "That proves DOMPurify handles it correctly
+after all — the marker stayed false." Is that the right conclusion?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and this is worth being precise about, the same way DECISIONS.md is.
+The marker stayed false because MODERN BROWSERS no longer execute
+`javascript:` URLs referenced from CSS `url()` — a defense that has
+nothing to do with DOMPurify at all. If a browser (or a future CSS
+feature) ever revived that capability, this exact payload would sail
+through completely unsanitized, because DOMPurify's default configuration
+didn't touch it. The correct, precise claim is: "this specific payload
+shape is currently harmless due to an unrelated browser-level protection,
+not because our sanitizer defended against it" — conflating the two would
+leave a real, latent gap invisible until the browser-level protection
+changed for some other reason.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why does DOMPurify need its OWN internal Trusted Types policy at all — why can't it just use the one WE create?</div>
+  <p>DOMPurify's sanitization process itself needs to build a DOM tree from the dirty input internally (to walk and filter it) — that internal DOM-building uses guarded sinks too, and DOMPurify has no way to know or reach into whatever policy YOUR calling code happens to have created. It solves this by creating its own, separately-named policy for its own internal use, which is exactly why that name needs its own allowlist entry.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does this module prove Trusted Types + DOMPurify makes an application fully immune to XSS?</div>
+  <p>No, and this course has been careful not to claim that. It closes the specific gap Module 14 identified (sinks accepting raw strings unconditionally) for the sinks Trusted Types actually guards. Track 1's CSP modules cover a different, complementary set of protections. Neither layer — nor both together — claims to be a complete security solution against every possible vulnerability class; they're real, verified, specific defenses against real, specific attack shapes.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: If we'd used `DOMPurify.sanitize(input)` directly (letting IT return a TrustedHTML, instead of wrapping it in our own policy), would anything have worked differently?</div>
+  <p>Functionally, likely similar results for these specific payloads — but the AUDITABILITY would differ. Our own explicit `dompurify-policy` is a single, visible, developer-authored point where "raw string becomes trusted" happens, matching this course's pattern since Module 16. Relying entirely on DOMPurify's own internal policy would make that same trust decision invisible to code review at the call site — a real, if subtle, engineering tradeoff between the two integration styles.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+This is the last numbered module. Track 1 (CSP Core Engine, 13 modules)
+and Track 2 (Trusted Types Applied Layer, 11 modules) are both complete —
+24 modules, every claim verified against a real running server and a real
+browser. What remains, per the Roadmap, are Phase 3 (cross-module concept
+clusters) and Phase 4 (vocabulary webs for commonly-confused terminology) —
+material that spans multiple modules rather than belonging to any single
+one.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../23_forged_object_defense/tutorial.html">← Module 23: Forged-Object Defense</a></div>
+  <div class="next"><a href="../../ROADMAP.md">Course Roadmap — what's next after Module 24 →</a></div>
+</div>
+
+<footer class="course-footer">Track 2 · Trusted Types Applied Layer · Module 24 of 24 — Course complete</footer>
+</body>
+</html>
