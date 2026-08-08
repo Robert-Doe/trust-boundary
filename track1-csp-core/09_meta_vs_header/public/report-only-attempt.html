@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proof D — meta Report-Only?</title>
+<link rel="stylesheet" href="/style.css">
+<meta http-equiv="Content-Security-Policy-Report-Only" content="script-src 'self'">
+</head>
+<body>
+  <h1>Proof D — does &lt;meta http-equiv="Content-Security-Policy-Report-Only"&gt; do anything?</h1>
+  <p>No HTTP header CSP anywhere on this page. The only policy attempt is the
+     <code>&lt;meta http-equiv="Content-Security-Policy-Report-Only" ...&gt;</code>
+     tag above. Module 4 proved this header name works fine over HTTP. Does
+     it work as a meta tag?</p>
+
+  <div class="proof">
+    <b>Inline script, no policy of any kind should be blocking it whether or not the meta tag "worked" — the real test is whether a VIOLATION gets reported for it</b>
+    <p id="inline-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log (did report-only-via-meta actually produce a violation event?)</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <script>
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      window.__cspViolations.push({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, disposition: e.disposition });
+    });
+    document.getElementById('inline-proof').textContent = 'ran — inline script executed (expected either way; the real question is whether it also produced a violation report)';
+    document.getElementById('inline-proof').className = 'result allowed';
+
+    const log = document.getElementById('violation-log');
+    let count = 0;
+    function render(v) {
+      count++;
+      log.textContent = (count === 1 ? '' : log.textContent + '\n') + `#${count} blockedURI=${v.blockedURI} violatedDirective=${v.violatedDirective} disposition=${v.disposition}`;
+    }
+    window.__cspViolations.forEach(render);
+    document.addEventListener('securitypolicyviolation', (e) => render({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, disposition: e.disposition }));
+
+    // Give any async violation reporting a moment, then state the conclusion.
+    setTimeout(() => {
+      if (count === 0) {
+        log.textContent = '(still none after 500ms — meta Report-Only produced NO violation event at all)';
+      }
+    }, 500);
+  </script>
+  <p><a href="/" style="color:#79c0ff">← back to Module 9</a></p>
+</body>
+</html>

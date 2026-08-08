@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 9 — Meta Tag vs. Header</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/violation-listener.js"></script>
+
+<!-- Proof A: this inline script runs BEFORE the meta CSP tag below. No
+     header CSP is active either. Predict: ALLOWED — nothing has restricted
+     it yet at the point the parser reaches it. -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('before-meta-proof').textContent = 'ran — this inline script executed BEFORE the <meta> CSP tag was parsed';
+    document.getElementById('before-meta-proof').className = 'result allowed';
+  });
+</script>
+
+<!-- The meta CSP itself. Includes frame-ancestors, which the spec says
+     <meta> CANNOT enforce — Proof C checks the console for the browser's
+     own warning about this. -->
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; frame-ancestors 'none'">
+
+<!-- Proof B: this inline script is written AFTER the meta tag. Predict:
+     BLOCKED — script-src 'self' with no 'unsafe-inline' is now active. -->
+<script>
+  document.getElementById('after-meta-proof').textContent = 'ran (should NOT happen — meta CSP should be active by now)';
+  document.getElementById('after-meta-proof').className = 'result allowed';
+</script>
+</head>
+<body>
+  <h1>Module 9 — Meta Tag vs. Header</h1>
+  <p>This page has NO Content-Security-Policy HTTP header at all — the only
+     policy anywhere is <code>&lt;meta http-equiv="Content-Security-Policy"
+     content="script-src 'self'; frame-ancestors 'none'"&gt;</code>, placed
+     partway through <code>&lt;head&gt;</code>.</p>
+
+  <div class="proof">
+    <b>Proof A — inline script BEFORE the meta tag (predict: ALLOWED — policy wasn't active yet)</b>
+    <p id="before-meta-proof" class="result">(waiting for DOMContentLoaded...)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof B — inline script AFTER the meta tag (predict: BLOCKED — policy is active by then)</b>
+    <p id="after-meta-proof" class="result">(has not run yet)</p>
+  </div>
+
+  <div class="proof">
+    <b>Proof C — does the browser warn that &lt;meta&gt; cannot enforce frame-ancestors?</b>
+    <p class="result">This one can't be checked from page script — a browser-generated
+    console warning isn't visible to page JS, only to real DevTools. See this
+    module's DECISIONS.md/tutorial.html for the exact captured message.</p>
+  </div>
+
+  <div class="proof">
+    <b>Live CSP violation log</b>
+    <div id="violation-log">(none yet)</div>
+  </div>
+
+  <p><a href="/report-only-attempt.html" style="color:#79c0ff">→ Proof D: does &lt;meta http-equiv="Content-Security-Policy-Report-Only"&gt; work at all?</a></p>
+
+  <script src="/wiring.js"></script>
+</body>
+</html>

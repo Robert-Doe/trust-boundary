@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 9 — Meta Tag vs. Header</title>
+<link rel="stylesheet" href="../../assets/course.css">
+<style>:root { --accent: #ff7b72; }</style>
+</head>
+<body>
+
+<h1><span class="module-kicker">Track 1 · Phase 1 · Module 9</span>Meta Tag vs. Header</h1>
+
+<h2 id="prereq">00 — Prerequisites</h2>
+<div class="prereq-bar">
+  <span class="prereq-label">You should already know:</span>
+  <a class="tag-link" href="../../prerequisites/01_http_headers_and_origins.html#http-request-response">http-request-response</a>
+  <a class="tag-link" href="../04_report_only_mode/tutorial.html">Module 4: Report-Only Mode</a>
+</div>
+
+<h2 id="analogy">01 — The Big Analogy</h2>
+<div class="analogy-box">
+<p>
+An HTTP header is a security briefing handed to the building's staff
+<em>before the doors open</em> — everyone inside knows the rules from
+minute zero. A <code>&lt;meta&gt;</code> CSP is more like a policy notice
+posted on a bulletin board <em>partway down a hallway</em> — anyone who
+already walked past that point before it went up never saw it, and some
+rules (like "no photographing the building from outside," analogous to
+<code>frame-ancestors</code>) can't be enforced by a bulletin board no
+matter how clearly it's worded — that's a perimeter-security decision, not
+something a sign inside the building can control.
+</p>
+</div>
+
+<h2 id="steps">02 — What Happens, Step by Step</h2>
+<ol class="step-list">
+  <li>Browser starts parsing HTML. An inline script before any <code>&lt;meta&gt;</code> CSP tag runs — nothing has restricted it yet.</li>
+  <li>Parser reaches <code>&lt;meta http-equiv="Content-Security-Policy" content="script-src 'self'; frame-ancestors 'none'"&gt;</code> and activates that policy from this point forward.</li>
+  <li>Browser also immediately determines it cannot enforce <code>frame-ancestors</code> via <code>&lt;meta&gt;</code> at all, and logs a warning saying so — the directive is silently dropped, not silently "best-effort applied."</li>
+  <li>An inline script written after the <code>&lt;meta&gt;</code> tag is now blocked by the active <code>script-src 'self'</code>.</li>
+  <li>On a separate page, a <code>&lt;meta http-equiv="Content-Security-Policy-Report-Only"&gt;</code> tag is parsed — and produces neither a blocked action NOR a violation event. The browser logs that it disallowed and ignored the entire policy.</li>
+</ol>
+
+<h2 id="map">03 — State Map</h2>
+<div class="diagram-frame">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#c9d1d9">
+    <text x="10" y="20" fill="#fff">&lt;head&gt; parse order, top to bottom →</text>
+
+    <rect x="10" y="40" width="150" height="40" rx="6" fill="#161b22" stroke="#3fb950"/>
+    <text x="20" y="65">Proof A script</text>
+    <text x="175" y="65" fill="#3fb950">ALLOWED (no policy yet)</text>
+
+    <rect x="10" y="90" width="150" height="40" rx="6" fill="#161b22" stroke="#79c0ff"/>
+    <text x="20" y="115">&lt;meta CSP&gt;</text>
+    <text x="175" y="115" fill="#79c0ff">policy activates HERE</text>
+
+    <rect x="10" y="140" width="150" height="40" rx="6" fill="#161b22" stroke="#f85149"/>
+    <text x="20" y="165">Proof B script</text>
+    <text x="175" y="165" fill="#f85149">BLOCKED (policy active)</text>
+  </g>
+</svg>
+</div>
+
+<h2 id="code">04 — The Code, Explained</h2>
+<p>The meta tag whose position is the entire point — <a href="public/index.html">public/index.html</a>:</p>
+<pre><code>&lt;script&gt;/* Proof A: runs, nothing active yet */&lt;/script&gt;
+&lt;meta http-equiv="Content-Security-Policy" content="script-src 'self'; frame-ancestors 'none'"&gt;
+&lt;script&gt;/* Proof B: blocked, policy is active now */&lt;/script&gt;</code></pre>
+<p>The real console warnings this module's whole argument rests on — captured, not paraphrased:</p>
+<pre><code>The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a &lt;meta&gt; element.
+
+The report-only Content Security Policy 'script-src 'self'' was delivered via a
+&lt;meta&gt; element, which is disallowed. The policy has been ignored.</code></pre>
+
+<h2 id="limits">05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-box">
+  <div class="cant">
+    <h4>✗ CAN'T DO YET</h4>
+    <ul>
+      <li>Protect content that appears before the `&lt;meta&gt;` tag in the document</li>
+      <li>Enforce `frame-ancestors`, `report-to`/`report-uri`, or `sandbox` via `&lt;meta&gt;` at all</li>
+      <li>Use Report-Only mode via `&lt;meta&gt;` — it's flatly disallowed, not just weaker</li>
+    </ul>
+  </div>
+  <div class="can">
+    <h4>✓ CAN DO</h4>
+    <ul>
+      <li>Ship a real, enforcing CSP from environments where you can't control HTTP response headers</li>
+      <li>Correctly predict which of the three directive families silently won't work there</li>
+      <li>Recognize the specific "policy notice, not perimeter security" shape of what `&lt;meta&gt;` can and can't do</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="run">06 — Run It</h2>
+<div class="run-block">
+  <div class="run-label">from track1-csp-core/09_meta_vs_header/</div>
+  <pre><code>node server.js</code></pre>
+</div>
+<p>Open <code>http://localhost:6400</code>, then follow the link to the Proof D page. Real captured results:</p>
+<div class="run-block">
+  <div class="run-label">page text + console (verified)</div>
+  <pre><code>Proof A — ran — this inline script executed BEFORE the &lt;meta&gt; CSP tag was parsed
+Proof B — (has not run yet)
+Proof C (console) — The Content Security Policy directive 'frame-ancestors'
+          is ignored when delivered via a &lt;meta&gt; element.
+Proof D (console) — The report-only Content Security Policy 'script-src 'self''
+          was delivered via a &lt;meta&gt; element, which is disallowed.
+          The policy has been ignored.
+Proof D (page)    — (still none after 500ms — meta Report-Only produced
+                     NO violation event at all)</code></pre>
+</div>
+<div class="callout warn">
+  <span class="label">Getting a blank or broken result?</span>
+  If Proof A shows blocked too, double-check the script tag order in
+  <code>public/index.html</code> — the placeholder comments call out exactly
+  which script must come before vs. after the <code>&lt;meta&gt;</code> tag,
+  and it's easy to reorder them by accident while editing.
+</div>
+
+<h2 id="exercise">07 — Brain Exercise</h2>
+<details class="exercise-box">
+<summary>Think it through before revealing</summary>
+<p>
+A team ships a strict CSP via <code>&lt;meta&gt;</code> because their static
+host doesn't let them set custom HTTP headers. Their policy includes
+<code>frame-ancestors 'none'</code>, and they believe this protects them
+from clickjacking. Are they actually protected?
+</p>
+<p><strong>Reveal the answer:</strong></p>
+<p>
+No — and this is a real, dangerous gap this module's Proof C exists to
+surface. `frame-ancestors` is silently ignored when delivered via
+`&lt;meta&gt;`; the browser logs a console warning, but nothing in the
+page's actual behavior changes, and most teams never open DevTools on a
+production page to notice a console warning that isn't an error. The team
+in this scenario has zero clickjacking protection despite their policy
+explicitly declaring `frame-ancestors 'none'` — the directive is present in
+their source code and completely inert at runtime. This is exactly why
+Module 12, which covers `frame-ancestors` in depth, matters even to teams
+already using `&lt;meta&gt;` CSP: they need a different delivery mechanism
+for that one directive specifically, or an `X-Frame-Options` header as a
+fallback (a separate, older, header-only mechanism).
+</p>
+</details>
+
+<h2 id="qa">08 — There Are No Dumb Questions</h2>
+<div class="qa-item">
+  <div class="q">Q: Can I put the `&lt;meta&gt;` CSP tag as the very first thing in `&lt;head&gt;` to avoid the "before/after" gap entirely?</div>
+  <p>Yes — and that's the practical mitigation for Proof A/B's gap: place the `&lt;meta&gt;` tag as early as structurally possible (ideally right after `&lt;meta charset&gt;`) so as little content as possible parses before it activates. It doesn't eliminate the category of gap, but it minimizes its window.</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Do multiple `&lt;meta&gt;` CSP tags on one page combine the same way Module 8's two headers did?</div>
+  <p>Yes — the same intersection rule applies. Each `&lt;meta&gt;` CSP tag the parser encounters becomes another independently-enforced active policy, exactly like a second header line, combining by AND with everything already active (including any header-delivered policy on the same page).</p>
+</div>
+<div class="qa-item">
+  <div class="q">Q: Why does the browser bother logging a console warning for something it's just going to ignore anyway?</div>
+  <p>It's a real, if imperfect, mitigation for exactly the Brain Exercise scenario above — a developer who does check their console during development has a chance to notice the directive is dead. It doesn't help in production, where almost nobody has DevTools open, which is precisely why relying on the warning instead of avoiding the gap in the first place is not a real fix.</p>
+</div>
+
+<h2 id="next">09 — What's Next</h2>
+<p>
+Module 10 goes deep on the piece every module since Module 3 has only
+brushed against: the actual Reporting API — <code>report-to</code>, a real
+collector endpoint, and the full shape of a delivered violation report,
+server-side.
+</p>
+
+<div class="module-nav">
+  <div class="prev"><a href="../08_multi_policy_intersection/tutorial.html">← Module 8: Multiple-Policy Intersection</a></div>
+  <div class="next"><a href="../10_violation_reporting_api/tutorial.html">Module 10: Violation Reporting API →</a></div>
+</div>
+
+<footer class="course-footer">Track 1 · CSP Core Engine · Module 9 of 13</footer>
+</body>
+</html>
