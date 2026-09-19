@@ -23,3 +23,7 @@ npm-debug.log
 dist/
 build/
 *.tmp
+
+# webapp/ (Vite demo)
+webapp/node_modules/
+webapp/dist/
