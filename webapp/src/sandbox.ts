@@ -1,8 +1,8 @@
 // Builds and runs a fully-sandboxed <iframe> that hosts the user's
 // CSP-meta-tag + HTML/script snippet, and relays what happened back out via
-// postMessage — because a `sandbox="allow-scripts"` iframe with NO
+// postMessage, because a `sandbox="allow-scripts"` iframe with NO
 // `allow-same-origin` has an opaque origin, the parent page cannot reach
-// into it directly (by design — see the SAFETY CONSTRAINT this app was
+// into it directly (by design, see the SAFETY CONSTRAINT this app was
 // built under). postMessage is the one channel that still works across
 // that boundary.
 
@@ -57,7 +57,7 @@ export interface SandboxHandle {
 /**
  * metaCsp: the full `<meta http-equiv="Content-Security-Policy" content="...">`
  *          tag, or '' to omit it entirely (the "no policy" baseline).
- * bodyHtml: arbitrary HTML/script placed in <body>, AFTER the meta tag —
+ * bodyHtml: arbitrary HTML/script placed in <body>, AFTER the meta tag,
  *           so it is genuinely subject to whatever policy was supplied.
  */
 export function runInSandbox(container: HTMLElement, metaCsp: string, bodyHtml: string): SandboxHandle {

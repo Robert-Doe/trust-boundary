@@ -1,4 +1,4 @@
-// CSP Playground tab — real enforcement, run inside a sandboxed iframe.
+// CSP Playground tab, real enforcement, run inside a sandboxed iframe.
 //
 // Every preset below is lifted directly from a track1-csp-core module's own
 // mechanism (see the comment on each), not invented for this demo.
@@ -40,7 +40,7 @@ const SNIPPET_PRESETS: Record<string, { label: string; html: string }> = {
     label: 'Inline <script> injection attempt',
     html: `<div id="probe-inline">(pending)</div>
 <script>
-  document.getElementById('probe-inline').textContent = 'ran — inline script executed unrestricted';
+  document.getElementById('probe-inline').textContent = 'ran, inline script executed unrestricted';
   window.reportProbe('inline-script', true, 'Inline <script> with no nonce/hash executed. This is exactly what a reflected-XSS payload would try to do.');
 <\/script>`,
   },
@@ -50,7 +50,7 @@ const SNIPPET_PRESETS: Record<string, { label: string; html: string }> = {
 <script nonce="{{NONCE}}">
   try {
     var r = eval('21 + 21');
-    window.reportProbe('eval', true, 'eval() executed — result: ' + r + ' (policy allows unsafe-eval, or none was set)');
+    window.reportProbe('eval', true, 'eval() executed, result: ' + r + ' (policy allows unsafe-eval, or none was set)');
   } catch (e) {
     window.reportProbe('eval', false, 'eval() threw ' + e.constructor.name + ': ' + e.message);
   }
@@ -60,14 +60,14 @@ const SNIPPET_PRESETS: Record<string, { label: string; html: string }> = {
     label: 'Nonce-matched inline script',
     html: `<div id="probe-nonce">(pending)</div>
 <script nonce="{{NONCE}}">
-  document.getElementById('probe-nonce').textContent = 'ran — nonce matched the policy';
+  document.getElementById('probe-nonce').textContent = 'ran, nonce matched the policy';
   window.reportProbe('nonce-script', true, 'Inline script whose nonce attribute matches the fresh per-run nonce in the policy executed.');
 <\/script>`,
   },
   hashScript: {
     label: 'Hash-matched inline script',
     html: `<div id="probe-hash">(pending)</div>
-<script>document.getElementById('probe-hash').textContent = 'ran — this exact byte content was hashed and allowlisted'; window.reportProbe('hash-script', true, 'This inline script\\'s exact byte content was SHA-256 hashed and the digest allowlisted in script-src.');<\/script>`,
+<script>document.getElementById('probe-hash').textContent = 'ran, this exact byte content was hashed and allowlisted'; window.reportProbe('hash-script', true, 'This inline script\\'s exact byte content was SHA-256 hashed and the digest allowlisted in script-src.');<\/script>`,
   },
   strictDynamic: {
     label: 'strict-dynamic: root + dynamic child + static child',
@@ -85,14 +85,14 @@ const SNIPPET_PRESETS: Record<string, { label: string; html: string }> = {
 
 <!-- The trusted root: nonce matches the policy. -->
 <script nonce="{{NONCE}}">
-  document.getElementById('probe-root').textContent = 'ran — root nonced script executed';
+  document.getElementById('probe-root').textContent = 'ran, root nonced script executed';
   window.reportProbe('root-script', true, 'Root nonced script executed.');
 
   // Non-parser-inserted (createElement + appendChild), NO nonce of its own.
   // Under 'strict-dynamic' this should still run: trust propagates from the
   // already-trusted root script to whatever it dynamically inserts.
   var child = document.createElement('script');
-  child.textContent = "document.getElementById('probe-dynamic-child').textContent = 'ran — trust propagated'; window.reportProbe('dynamic-child', true, 'Dynamically-inserted (createElement+appendChild) child script with NO nonce executed — strict-dynamic propagated trust from the root script.');";
+  child.textContent = "document.getElementById('probe-dynamic-child').textContent = 'ran (trust propagated'; window.reportProbe('dynamic-child', true, 'Dynamically-inserted (createElement+appendChild) child script with NO nonce executed) strict-dynamic propagated trust from the root script.');";
   document.body.appendChild(child);
 <\/script>`,
   },
@@ -112,7 +112,7 @@ export function initCspTab(root: HTMLElement) {
         </select>
         <label for="csp-policy-text">Content-Security-Policy</label>
         <textarea id="csp-policy-text" rows="3" spellcheck="false"></textarea>
-        <div class="note">Placeholders <code class="inline">{{NONCE}}</code> / <code class="inline">{{HASH}}</code> are substituted with a fresh value each run — exactly like Module 5/6/7's server generating a new nonce or computing a real digest per response.</div>
+        <div class="note">Placeholders <code class="inline">{{NONCE}}</code> / <code class="inline">{{HASH}}</code> are substituted with a fresh value each run, exactly like Module 5/6/7's server generating a new nonce or computing a real digest per response.</div>
       </div>
       <div class="card">
         <h3>HTML / script snippet <span class="hint">rendered in &lt;body&gt;</span></h3>
@@ -168,7 +168,7 @@ export function initCspTab(root: HTMLElement) {
   hashBtn.addEventListener('click', async () => {
     const exact = extractFirstHashableInlineScript(snippetText.value);
     if (!exact) {
-      output.innerHTML = `<div class="log-line blocked">No inline &lt;script&gt; without src/nonce found in the snippet — hash sourcing only applies to those.</div>`;
+      output.innerHTML = `<div class="log-line blocked">No inline &lt;script&gt; without src/nonce found in the snippet, hash sourcing only applies to those.</div>`;
       return;
     }
     const digest = await sha256Base64(exact);
@@ -178,7 +178,7 @@ export function initCspTab(root: HTMLElement) {
     } else {
       policyText.value = (policyText.value ? policyText.value + '; ' : '') + `script-src 'self' ${src}`;
     }
-    output.innerHTML = `<div class="log-line allowed">Computed SHA-256 over the exact snippet bytes: <code class="inline">${src}</code> — inserted into the policy.</div>`;
+    output.innerHTML = `<div class="log-line allowed">Computed SHA-256 over the exact snippet bytes: <code class="inline">${src}</code>, inserted into the policy.</div>`;
   });
 
   applyPreset('none');
@@ -211,7 +211,7 @@ export function initCspTab(root: HTMLElement) {
 
     output.innerHTML = '';
     log([
-      { kind: 'error', message: `Policy sent: ${policy.trim() || '(none — no <meta> CSP tag at all)'}` } as SandboxEvent,
+      { kind: 'error', message: `Policy sent: ${policy.trim() || '(none, no <meta> CSP tag at all)'}` } as SandboxEvent,
       ...collected,
     ]);
     renderVerdicts(snippet, collected);

@@ -1,4 +1,4 @@
-// Trusted Types Playground tab — real enforcement, run inside a sandboxed
+// Trusted Types Playground tab, real enforcement, run inside a sandboxed
 // iframe. Mirrors track2-trusted-types: Module 16 (policy factory), Module
 // 17 (createHTML rule), Module 18 (innerHTML/outerHTML/insertAdjacentHTML
 // sink guard incl. duck-typed fakes), and Module 20 (policy name allowlist
@@ -10,10 +10,10 @@ type PolicyKind = 'none' | 'passthrough' | 'sanitize';
 
 const POLICY_SETUP: Record<PolicyKind, string> = {
   none: `// No trustedTypes.createPolicy() call anywhere on this page.
-window.reportProbe('policy-setup', true, 'No policy was defined — __ttPolicy stays null.');`,
+window.reportProbe('policy-setup', true, 'No policy was defined, __ttPolicy stays null.');`,
   passthrough: `try {
   window.__ttPolicy = trustedTypes.createPolicy('{{POLICY_NAME}}', {
-    createHTML: function (input) { return input; } // no transform — this is about TYPE, not content (Module 18)
+    createHTML: function (input) { return input; } // no transform, this is about TYPE, not content (Module 18)
   });
   window.reportProbe('policy-setup', true, 'trustedTypes.createPolicy("{{POLICY_NAME}}", { createHTML: passthrough }) succeeded.');
 } catch (e) {
@@ -21,7 +21,7 @@ window.reportProbe('policy-setup', true, 'No policy was defined — __ttPolicy s
 }`,
   sanitize: `try {
   window.__ttPolicy = trustedTypes.createPolicy('{{POLICY_NAME}}', {
-    // Deliberately naive — strips <script> tags only, for demo purposes.
+    // Deliberately naive, strips <script> tags only, for demo purposes.
     // Module 24's real sanitizer capstone goes considerably further.
     createHTML: function (input) { return input.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, ''); }
   });
@@ -33,7 +33,7 @@ window.reportProbe('policy-setup', true, 'No policy was defined — __ttPolicy s
 
 function buildBodyHtml(nonce: string, policyKind: PolicyKind, policyName: string): string {
   const setup = POLICY_SETUP[policyKind].replaceAll('{{POLICY_NAME}}', policyName);
-  return `<div id="tt-target">(sink target — not visible; its resulting HTML is reported via postMessage)</div>
+  return `<div id="tt-target">(sink target, not visible; its resulting HTML is reported via postMessage)</div>
 <script nonce="${nonce}">
   window.__ttPolicy = null;
   ${setup}
@@ -47,16 +47,16 @@ function buildBodyHtml(nonce: string, policyKind: PolicyKind, policyName: string
         el.innerHTML = '<b>raw string, never touched a policy</b>';
       } else if (kind === 'policy') {
         if (!window.__ttPolicy) throw new Error('no Trusted Types policy is defined on this page');
-        el.innerHTML = window.__ttPolicy.createHTML('<b>hello</b> <script>window.__xss = true<\\/script> — via policy.createHTML()');
+        el.innerHTML = window.__ttPolicy.createHTML('<b>hello</b> <script>window.__xss = true<\\/script>, via policy.createHTML()');
       } else if (kind === 'fake') {
         var fake = { toString: function () { return '<b>fake, produced via .toString()</b>'; } };
-        el.innerHTML = fake; // NOT created via any policy — just LOOKS right when stringified
+        el.innerHTML = fake; // NOT created via any policy, just LOOKS right when stringified
       } else if (kind === 'policy-name') {
         trustedTypes.createPolicy(ev.data.name, { createHTML: function (s) { return s; } });
         window.reportProbe('policy-name', true, 'createPolicy("' + ev.data.name + '") SUCCEEDED (unexpected if the trusted-types allowlist should have blocked this name).');
         return;
       }
-      window.reportProbe('sink-' + kind, true, 'innerHTML assignment SUCCEEDED — resulting innerHTML: ' + el.innerHTML);
+      window.reportProbe('sink-' + kind, true, 'innerHTML assignment SUCCEEDED, resulting innerHTML: ' + el.innerHTML);
     } catch (e) {
       window.reportProbe('sink-' + kind, false, 'THREW ' + e.constructor.name + ': ' + e.message);
     }
@@ -72,8 +72,8 @@ export function initTrustedTypesTab(root: HTMLElement) {
         <label for="tt-policy-kind">createHTML rule</label>
         <select id="tt-policy-kind">
           <option value="none">No policy defined (Module 16, Proof A/D baseline)</option>
-          <option value="passthrough" selected>Passthrough — return input unchanged (Module 16/18)</option>
-          <option value="sanitize">Sanitizing — strips &lt;script&gt; tags (Module 24-style)</option>
+          <option value="passthrough" selected>Passthrough, return input unchanged (Module 16/18)</option>
+          <option value="sanitize">Sanitizing, strips &lt;script&gt; tags (Module 24-style)</option>
         </select>
         <label for="tt-policy-name">Policy name</label>
         <textarea id="tt-policy-name" rows="1" spellcheck="false">app-policy</textarea>
@@ -98,7 +98,7 @@ export function initTrustedTypesTab(root: HTMLElement) {
           <button class="ghost" id="tt-fake" disabled>Duck-typed fake (.toString()) → innerHTML</button>
           <button class="ghost" id="tt-policy-name-btn" disabled>Try createPolicy('rogue-name')</button>
         </div>
-        <div class="note">Load the sandbox first. Each button posts a command into the already-running iframe — the same policy instance handles every attempt, proving policies aren't re-checked per call, just enforced per sink (Module 16, Proof D).</div>
+        <div class="note">Load the sandbox first. Each button posts a command into the already-running iframe, the same policy instance handles every attempt, proving policies aren't re-checked per call, just enforced per sink (Module 16, Proof D).</div>
       </div>
     </div>
     <div class="output">
