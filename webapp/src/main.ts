@@ -14,9 +14,9 @@ app.innerHTML = `
   </div>
 
   <div class="hero">
-    <div class="pill">real enforcement, not a mockup</div>
+    <div class="pill">real enforcement, live in your browser</div>
     <h1>Trust Boundary <span class="accent">—</span> CSP &amp; Trusted Types Playground</h1>
-    <p class="tagline">Edit a real Content-Security-Policy and an HTML/script snippet, run it inside a sandboxed iframe, and watch the browser's own <code class="inline">securitypolicyviolation</code> events and Trusted Types API decide what executes — the exact mechanics taught in this course's track1-csp-core and track2-trusted-types modules.</p>
+    <p class="tagline">Edit a real Content-Security-Policy and an HTML/script snippet, run it inside a sandboxed iframe, and watch the browser's own <code class="inline">securitypolicyviolation</code> events and Trusted Types API decide what executes. These are the exact mechanics taught in this course's CSP and Trusted Types tracks.</p>
   </div>
 
   <div class="tabs">
